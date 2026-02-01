@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  DRIVER
+  PASSENGER
+  BOTH
+}
+
+enum ContactType {
+  EMAIL
+  PHONE
+  WECHAT
+  OTHER
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String
+
+  name         String
+  photoUrl     String?
+  contactType  ContactType
+  contactValue String
+
+  campus       String
+  homeArea     String
+  role         Role        @default(BOTH)
+  timeZone     String      @default("America/Vancouver")
+
+  isActive     Boolean     @default(true)
+
+  schedule     ScheduleEntry[]
+
+  sentConnections     ConnectionRequest[] @relation("SentConnections")
+  receivedConnections ConnectionRequest[] @relation("ReceivedConnections")
+
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([campus])
+  @@index([homeArea])
+}
+
+model ScheduleEntry {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 0..6 (0 = Sunday)
+  dayOfWeek       Int
+
+  // store times as minutes since midnight (e.g., "08:30" => 510)
+  toCampusMins    Int
+  goHomeMins      Int
+
+  // flexibility window, used by matching logic
+  toCampusFlexMin Int      @default(15)
+  goHomeFlexMin   Int      @default(15)
+
+  enabled         Boolean  @default(true)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, dayOfWeek])
+  @@index([dayOfWeek, toCampusMins])
+  @@index([dayOfWeek, goHomeMins])
+}
+
+model ConnectionRequest {
+  id         String           @id @default(cuid())
+
+  fromUserId String
+  toUserId   String
+
+  fromUser   User             @relation("SentConnections", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser     User             @relation("ReceivedConnections", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  message    String?
+  status     ConnectionStatus @default(PENDING)
+  respondedAt DateTime?
+
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  // MVP: one connection thread per pair (you can “re-request” by updating status/message)
+  @@unique([fromUserId, toUserId])
+  @@index([toUserId, status, createdAt])
+}

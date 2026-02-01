@@ -1,0 +1,30 @@
+{
+  "name": "school-carpool-app",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node-dev --respawn --transpile-only carpool/bin/www.ts",
+    "start": "node dist/bin/www.js",
+    "frontend:dev": "cd frontend && npm start",
+    "frontend:build": "cd frontend && npm run build",
+    "frontend:test": "cd frontend && npm test",
+    "dev:all": "concurrently \"npm run dev\" \"npm run frontend:dev\"",
+    "install:all": "npm install && cd carpool && npm install && cd ../frontend && npm install"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.3.0",
+    "@prisma/client": "^7.3.0",
+    "@types/cors": "^2.8.19",
+    "cors": "^2.8.6",
+    "pg": "^8.18.0",
+    "prisma": "^7.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.1.0",
+    "@types/pg": "^8.16.0",
+    "concurrently": "^9.1.0",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.7.2"
+  }
+}
