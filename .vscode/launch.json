@@ -1,0 +1,39 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Mocha Tests",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/carpool/node_modules/.bin/mocha",
+      "args": [
+        "--require", "ts-node/register",
+        "--timeout", "10000",
+        "${workspaceFolder}/carpool/tests/**/*.test.ts"
+      ],
+      "cwd": "${workspaceFolder}/carpool",
+      "env": {
+        "NODE_ENV": "test"
+      },
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "name": "Run Current Test File",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/carpool/node_modules/.bin/mocha",
+      "args": [
+        "--require", "ts-node/register",
+        "--timeout", "10000",
+        "${relativeFile}"
+      ],
+      "cwd": "${workspaceFolder}/carpool",
+      "env": {
+        "NODE_ENV": "test"
+      },
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    }
+  ]
+}

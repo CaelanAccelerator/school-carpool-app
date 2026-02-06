@@ -4,7 +4,7 @@
     "module": "commonjs",
     "lib": ["ES2020"],
     "outDir": "./dist",
-    "rootDir": "./carpool",
+    "rootDir": "./",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -15,12 +15,18 @@
     "sourceMap": true
   },
   "include": [
-    "carpool/**/*"
+    "controllers/**/*",
+    "lib/**/*", 
+    "middleware/**/*",
+    "routes/**/*",
+    "tests/**/*",
+    "bin/**/*",
+    "app.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "carpool/public/**/*",
-    "carpool/views/**/*"
+    "frontend/**/*",
+    "public/**/*"
   ]
 }

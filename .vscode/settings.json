@@ -1,0 +1,29 @@
+{
+  "mochaExplorer.files": "carpool/tests/**/*.test.ts",
+  "mochaExplorer.require": ["ts-node/register"],
+  "mochaExplorer.timeout": 10000,
+  "mochaExplorer.env": {
+    "NODE_ENV": "test"
+  },
+  "mochaExplorer.cwd": "${workspaceFolder}/carpool",
+  
+  "test.defaultProfile": "Mocha",
+  "test.profiles": [
+    {
+      "kind": "mocha",
+      "label": "Mocha",
+      "workingDirectory": "${workspaceFolder}/carpool",
+      "args": [
+        "--require", "ts-node/register",
+        "--timeout", "10000",
+        "tests/**/*.test.ts"
+      ]
+    }
+  ],
+
+  "typescript.preferences.useAliasesForRenames": false,
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit"
+  }
+}
