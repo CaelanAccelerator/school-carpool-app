@@ -14,7 +14,10 @@ const createUserSchema = Joi.object({
   campus: Joi.string().required(),
   homeArea: Joi.string().required(),
   role: Joi.string().valid('DRIVER', 'PASSENGER', 'BOTH').default('BOTH'),
-  timeZone: Joi.string().default('America/Vancouver')
+  timeZone: Joi.string().default('America/Vancouver'),
+  homeAddress: Joi.string().optional().allow(''),
+  homeLat: Joi.number().optional(),
+  homeLng: Joi.number().optional()
 });
 
 const updateUserSchema = Joi.object({
@@ -26,7 +29,10 @@ const updateUserSchema = Joi.object({
   homeArea: Joi.string().optional(),
   role: Joi.string().valid('DRIVER', 'PASSENGER', 'BOTH').optional(),
   timeZone: Joi.string().optional(),
-  isActive: Joi.boolean().optional()
+  isActive: Joi.boolean().optional(),
+  homeAddress: Joi.string().optional().allow(''),
+  homeLat: Joi.number().optional().allow(null),
+  homeLng: Joi.number().optional().allow(null)
 });
 
 const changePasswordSchema = Joi.object({
@@ -94,6 +100,9 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
         homeArea: true,
         role: true,
         timeZone: true,
+        homeAddress: true,
+        homeLat: true,
+        homeLng: true,
         isActive: true,
         createdAt: true,
         updatedAt: true
@@ -144,6 +153,9 @@ export const getUsers = async (req: Request, res: Response): Promise<void> => {
           homeArea: true,
           role: true,
           timeZone: true,
+          homeAddress: true,
+          homeLat: true,
+          homeLng: true,
           isActive: true,
           createdAt: true,
           updatedAt: true
@@ -283,6 +295,9 @@ export const updateUser = async (req: Request, res: Response): Promise<void> => 
         homeArea: true,
         role: true,
         timeZone: true,
+        homeAddress: true,
+        homeLat: true,
+        homeLng: true,
         isActive: true,
         createdAt: true,
         updatedAt: true

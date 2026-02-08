@@ -7,12 +7,12 @@ const express_1 = __importDefault(require("express"));
 const scheduleController_1 = require("../controllers/scheduleController");
 const router = express_1.default.Router();
 // Schedule Entry CRUD operations
-router.post('/users/:userId/schedule', scheduleController_1.createScheduleEntry);
+router.put('/users/:userId/schedule', scheduleController_1.createScheduleEntry);
 router.get('/users/:userId/schedule', scheduleController_1.getUserScheduleEntries);
 router.get('/users/:userId/schedule/:dayOfWeek', scheduleController_1.getScheduleEntryByDay);
-router.put('/schedule/:entryId', scheduleController_1.updateScheduleEntry);
-router.delete('/schedule/:entryId', scheduleController_1.deleteScheduleEntry);
-// Bulk operations
-router.post('/users/:userId/schedule/weekly', scheduleController_1.createWeeklySchedule);
+// Bulk operations (define before :entryId to avoid route conflicts)
+router.put('/users/:userId/schedule/weekly', scheduleController_1.createWeeklySchedule);
+router.put('/users/:userId/schedule/:entryId', scheduleController_1.updateScheduleEntry);
+router.delete('/users/:userId/schedule/:entryId', scheduleController_1.deleteScheduleEntry);
 exports.default = router;
 //# sourceMappingURL=schedule.js.map

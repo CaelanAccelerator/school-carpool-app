@@ -94,7 +94,7 @@ describe('matchingController', () => {
       });
       const res = mockRes();
 
-      const mockUser = { id: 'test-user', name: 'Test User' };
+      const mockUser = { id: 'test-user', name: 'Test User', campus: 'Main Campus' };
       const mockDrivers = [
         { id: 'driver1', name: 'Driver 1', toCampusTimeMins: 480 },
         { id: 'driver2', name: 'Driver 2', toCampusTimeMins: 490 }
@@ -154,7 +154,7 @@ describe('matchingController', () => {
       });
       const res = mockRes();
 
-      const mockUser = { id: 'test-user', name: 'Test User' };
+      const mockUser = { id: 'test-user', name: 'Test User', campus: 'Main Campus' };
       const mockDrivers = [
         { id: 'driver1', name: 'Driver 1', goHomeMins: 1020 }
       ];
@@ -213,7 +213,7 @@ describe('matchingController', () => {
       });
       const res = mockRes();
 
-      const mockDriver = { id: 'driver-user', name: 'Driver User' };
+      const mockDriver = { id: 'driver-user', name: 'Driver User', campus: 'Main Campus' };
       const mockPassengers = [
         { id: 'passenger1', name: 'Passenger 1', toCampusMins: 480 }
       ];
@@ -272,7 +272,7 @@ describe('matchingController', () => {
       });
       const res = mockRes();
 
-      const mockDriver = { id: 'driver-user', name: 'Driver User' };
+      const mockDriver = { id: 'driver-user', name: 'Driver User', campus: 'Main Campus' };
       const mockPassengers = [
         { id: 'passenger1', name: 'Passenger 1', goHomeMins: 1020 }
       ];

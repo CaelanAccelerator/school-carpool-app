@@ -1,14 +1,16 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
 import { Container } from '@mui/material';
-import Header from './components/Header';
-import Home from './pages/Home';
-import UserList from './pages/UserList';
-import UserProfile from './pages/UserProfile';
-import CreateUser from './pages/CreateUser';
+import CssBaseline from '@mui/material/CssBaseline';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import './App.css';
+import Header from './components/Header';
+import CreateUser from './pages/CreateUser';
+import Home from './pages/Home';
+import Match from './pages/Match';
+import RideInbox from './pages/RideInbox';
+import RideOutbox from './pages/RideOutbox';
+import Schedule from './pages/Schedule';
+import UserProfile from './pages/UserProfile';
 
 const theme = createTheme({
   palette: {
@@ -31,9 +33,12 @@ function App() {
           <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
             <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/users" element={<UserList />} />
               <Route path="/users/:id" element={<UserProfile />} />
               <Route path="/create-user" element={<CreateUser />} />
+              <Route path="/match" element={<Match />} />
+              <Route path="/schedule" element={<Schedule />} />
+              <Route path="/ride-inbox" element={<RideInbox />} />
+              <Route path="/ride-outbox" element={<RideOutbox />} />
             </Routes>
           </Container>
         </div>

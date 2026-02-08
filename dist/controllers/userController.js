@@ -18,7 +18,10 @@ const createUserSchema = joi_1.default.object({
     campus: joi_1.default.string().required(),
     homeArea: joi_1.default.string().required(),
     role: joi_1.default.string().valid('DRIVER', 'PASSENGER', 'BOTH').default('BOTH'),
-    timeZone: joi_1.default.string().default('America/Vancouver')
+    timeZone: joi_1.default.string().default('America/Vancouver'),
+    homeAddress: joi_1.default.string().optional().allow(''),
+    homeLat: joi_1.default.number().optional(),
+    homeLng: joi_1.default.number().optional()
 });
 const updateUserSchema = joi_1.default.object({
     name: joi_1.default.string().optional(),
@@ -29,7 +32,10 @@ const updateUserSchema = joi_1.default.object({
     homeArea: joi_1.default.string().optional(),
     role: joi_1.default.string().valid('DRIVER', 'PASSENGER', 'BOTH').optional(),
     timeZone: joi_1.default.string().optional(),
-    isActive: joi_1.default.boolean().optional()
+    isActive: joi_1.default.boolean().optional(),
+    homeAddress: joi_1.default.string().optional().allow(''),
+    homeLat: joi_1.default.number().optional().allow(null),
+    homeLng: joi_1.default.number().optional().allow(null)
 });
 const changePasswordSchema = joi_1.default.object({
     currentPassword: joi_1.default.string().required(),
@@ -87,6 +93,9 @@ const createUser = async (req, res) => {
                 homeArea: true,
                 role: true,
                 timeZone: true,
+                homeAddress: true,
+                homeLat: true,
+                homeLng: true,
                 isActive: true,
                 createdAt: true,
                 updatedAt: true
@@ -138,6 +147,9 @@ const getUsers = async (req, res) => {
                     homeArea: true,
                     role: true,
                     timeZone: true,
+                    homeAddress: true,
+                    homeLat: true,
+                    homeLng: true,
                     isActive: true,
                     createdAt: true,
                     updatedAt: true
@@ -271,6 +283,9 @@ const updateUser = async (req, res) => {
                 homeArea: true,
                 role: true,
                 timeZone: true,
+                homeAddress: true,
+                homeLat: true,
+                homeLng: true,
                 isActive: true,
                 createdAt: true,
                 updatedAt: true

@@ -1,15 +1,16 @@
-import createError from 'http-errors';
-import express, { Request, Response, NextFunction } from 'express';
-import path from 'path';
 import cookieParser from 'cookie-parser';
-import logger from 'morgan';
 import cors from 'cors';
-
-import indexRouter from './routes/index';
-import usersRouter from './routes/users';
-import scheduleRouter from './routes/schedule';
-import matchingRouter from './routes/matching';
+import express, { NextFunction, Request, Response } from 'express';
+import createError from 'http-errors';
+import logger from 'morgan';
+import path from 'path';
 import { errorHandler, requestLogger } from './middleware';
+import authRouter from './routes/auth';
+import indexRouter from './routes/index';
+import matchingRouter from './routes/matching';
+import rideRequestsRouter from './routes/rideRequests';
+import scheduleRouter from './routes/schedule';
+import usersRouter from './routes/users';
 
 const app = express();
 
@@ -30,9 +31,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Routes
 app.use('/', indexRouter);
+app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
-app.use('/api/schedule', scheduleRouter);
+app.use('/api', scheduleRouter);
 app.use('/api/matching', matchingRouter);
+app.use('/api/requests', rideRequestsRouter);
 
 // catch 404 and forward to error handler
 app.use(function(req: Request, res: Response, next: NextFunction) {

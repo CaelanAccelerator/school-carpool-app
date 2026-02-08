@@ -21,6 +21,7 @@ const makePrismaMock = () => {
     const scheduleEntryMock = {
         create: sinon_1.default.stub(),
         findUnique: sinon_1.default.stub(),
+        findFirst: sinon_1.default.stub(),
         findMany: sinon_1.default.stub(),
         update: sinon_1.default.stub(),
         delete: sinon_1.default.stub(),

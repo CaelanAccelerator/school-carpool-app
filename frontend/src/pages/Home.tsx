@@ -1,23 +1,24 @@
-import React, { useState, useEffect } from 'react';
 import {
-  Typography,
-  Paper,
-  Card,
-  CardContent,
-  Button,
-  Box,
-  CircularProgress,
-  Alert
-} from '@mui/material';
-import { Grid } from '@mui/material';
-import {
-  DirectionsCar,
-  People,
-  PersonAdd,
-  School
+    DirectionsCar,
+    People,
+    PersonAdd,
+    School
 } from '@mui/icons-material';
+import {
+    Alert,
+    Box,
+    Button,
+    Card,
+    CardContent,
+    CircularProgress,
+    Grid,
+    Paper,
+    TextField,
+    Typography
+} from '@mui/material';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { healthService, userService } from '../services/api';
+import { authService, healthService, userService } from '../services/api';
 import { PaginatedResponse, User } from '../types';
 
 const Home: React.FC = () => {
@@ -25,8 +26,16 @@ const Home: React.FC = () => {
   const [userCount, setUserCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
 
   useEffect(() => {
+    const storedRole = localStorage.getItem('currentUserRole');
+    setCurrentUserRole(storedRole);
+
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -48,7 +57,46 @@ const Home: React.FC = () => {
     };
 
     fetchData();
+
+    if (!storedRole) {
+      authService.me()
+        .then((user) => {
+          localStorage.setItem('currentUserId', user.id);
+          localStorage.setItem('currentUserRole', user.role);
+          localStorage.setItem('currentUserName', user.name);
+          setCurrentUserRole(user.role);
+        })
+        .catch(() => undefined);
+    }
   }, []);
+
+  const handleLogin = async () => {
+    const email = loginEmail.trim().toLowerCase();
+    const password = loginPassword.trim();
+    if (!email) {
+      setLoginError('Email is required');
+      return;
+    }
+    if (!password) {
+      setLoginError('Password is required');
+      return;
+    }
+
+    try {
+      setLoginLoading(true);
+      setLoginError('');
+      const user = await authService.login(email, password);
+      localStorage.setItem('currentUserId', user.id);
+      localStorage.setItem('currentUserRole', user.role);
+      localStorage.setItem('currentUserName', user.name);
+      setCurrentUserRole(user.role);
+      setLoginPassword('');
+    } catch (err) {
+      setLoginError(err instanceof Error ? err.message : 'Login failed');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -75,28 +123,80 @@ const Home: React.FC = () => {
           </Alert>
         )}
         
-        <Box sx={{ mt: 4 }}>
-          <Button
-            component={Link}
-            to="/create-user"
-            variant="contained"
-            size="large"
-            startIcon={<PersonAdd />}
-            sx={{ mr: 2 }}
-          >
-            Join Now
-          </Button>
-          <Button
-            component={Link}
-            to="/users"
-            variant="outlined"
-            size="large"
-            startIcon={<People />}
-          >
-            Browse Users
-          </Button>
+        <Box sx={{ mt: 4, display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'center' }}>
+          {!currentUserRole && (
+            <>
+              <Button
+                component={Link}
+                to="/create-user"
+                variant="contained"
+                size="large"
+                startIcon={<PersonAdd />}
+              >
+                Join Now
+              </Button>
+            </>
+          )}
+
+          {currentUserRole && (
+            <>
+              {(currentUserRole === 'PASSENGER' || currentUserRole === 'BOTH') && (
+                <Button component={Link} to="/match" variant="contained" size="large">
+                  Match
+                </Button>
+              )}
+              {(currentUserRole === 'DRIVER' || currentUserRole === 'BOTH') && (
+                <Button component={Link} to="/schedule" variant="contained" size="large">
+                  Add Schedule
+                </Button>
+              )}
+              <Button component={Link} to="/ride-inbox" variant="outlined" size="large">
+                Check Inbox
+              </Button>
+              <Button component={Link} to="/ride-outbox" variant="outlined" size="large">
+                Check Outbox
+              </Button>
+            </>
+          )}
         </Box>
       </Paper>
+
+      {!currentUserRole && (
+        <Paper sx={{ p: 3, mb: 4 }}>
+          <Typography variant="h6" gutterBottom>
+            Login
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Log in with your email and password.
+          </Typography>
+          <Box
+            display="flex"
+            flexDirection="column"
+            gap={2}
+            maxWidth={420}
+            sx={{ mx: 'auto', alignItems: 'center' }}
+          >
+            <TextField
+              label="Email"
+              type="email"
+              value={loginEmail}
+              onChange={(event) => setLoginEmail(event.target.value)}
+              fullWidth
+            />
+            <TextField
+              label="Password"
+              type="password"
+              value={loginPassword}
+              onChange={(event) => setLoginPassword(event.target.value)}
+              fullWidth
+            />
+            {loginError && <Alert severity="error">{loginError}</Alert>}
+            <Button variant="contained" onClick={handleLogin} disabled={loginLoading}>
+              {loginLoading ? 'Logging in...' : 'Login'}
+            </Button>
+          </Box>
+        </Paper>
+      )}
 
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 4 }}>

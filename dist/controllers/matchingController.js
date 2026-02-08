@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.findOptimalPassengersGoHome = exports.findOptimalPassengersToCampus = exports.findOptimalDriversGoHome = exports.findOptimalDriversToCampus = exports.getDriverAvailability = void 0;
 const client_1 = require("@prisma/client");
 const joi_1 = __importDefault(require("joi"));
+const campusCoords_1 = require("../lib/config/campusCoords");
+const MockGeoProvider_1 = require("../lib/geo/MockGeoProvider");
 const prisma_1 = require("../lib/prisma");
 const timeUtils_1 = require("../lib/timeUtils");
 // Validation schemas
@@ -40,38 +42,40 @@ const handleValidationError = (res, error) => {
         errors: error.details.map(detail => detail.message)
     });
 };
-// Shared matching function
-const matchByTimeField = async (params) => {
-    const { userId, dayOfWeek, timeValue, flexibilityMins, timeField, targetRoleGroup } = params;
-    // Convert time string to minutes
-    const timeMins = (0, timeUtils_1.timeToMinutes)(timeValue);
-    // Get user's info to match campus
+const geoProvider = new MockGeoProvider_1.MockGeoProvider();
+const mapWithConcurrency = async (items, limit, mapper) => {
+    const results = [];
+    for (let index = 0; index < items.length; index += limit) {
+        const batch = items.slice(index, index + limit);
+        const batchResults = await Promise.all(batch.map(mapper));
+        results.push(...batchResults);
+    }
+    return results;
+};
+// Helper functions for matching logic
+const getRequesterOrThrow = async (userId) => {
     const user = await prisma_1.prisma.user.findUnique({
         where: { id: userId },
-        select: { campus: true, homeArea: true }
+        select: { campus: true, homeArea: true, homeLat: true, homeLng: true }
     });
     if (!user) {
         throw new Error('USER_NOT_FOUND');
     }
-    // Determine target roles based on group
-    const targetRoles = targetRoleGroup === 'DRIVER'
+    return user;
+};
+const buildTargetRoles = (targetRoleGroup) => {
+    return targetRoleGroup === 'DRIVER'
         ? [client_1.Role.DRIVER, client_1.Role.BOTH]
         : [client_1.Role.PASSENGER, client_1.Role.BOTH];
-    // Build time filter condition
-    const timeFilter = {
-        [timeField]: {
-            gte: timeMins - flexibilityMins,
-            lte: timeMins + flexibilityMins
-        }
-    };
-    // Query matching entries
-    const matchingEntries = await prisma_1.prisma.scheduleEntry.findMany({
+};
+const queryMatchingEntries = async ({ dayOfWeek, userCampus, userId, targetRoles, timeField, timeFilter }) => {
+    return await prisma_1.prisma.scheduleEntry.findMany({
         where: {
             dayOfWeek,
             enabled: true,
             user: {
                 isActive: true,
-                campus: user.campus,
+                campus: userCampus,
                 role: { in: targetRoles },
                 id: { not: userId }
             },
@@ -85,6 +89,8 @@ const matchByTimeField = async (params) => {
                     photoUrl: true,
                     campus: true,
                     homeArea: true,
+                    homeLat: true,
+                    homeLng: true,
                     role: true,
                     timeZone: true
                 }
@@ -94,8 +100,9 @@ const matchByTimeField = async (params) => {
             { [timeField]: 'asc' }
         ]
     });
-    // Transform results with matching scores
-    const results = matchingEntries.map((entry) => {
+};
+const buildBaseResults = (matchingEntries, timeField, timeMins) => {
+    return matchingEntries.map((entry) => {
         const entryTimeMins = entry[timeField];
         const timeDifference = Math.abs(entryTimeMins - timeMins);
         return {
@@ -109,46 +116,129 @@ const matchByTimeField = async (params) => {
                 goHomeTimeFormatted: (0, timeUtils_1.minutesToTime)(entry.goHomeMins)
             },
             geoInfo: {
-                // Placeholder for geo API integration
-                estimatedPickupTime: null,
-                distance: null,
-                route: null
+                baseMins: null,
+                viaMins: null,
+                extraDetourMins: null
             }
         };
     });
-    // Sort by time difference (ascending)
-    return results.sort((a, b) => a.matchingScore.timeDifference - b.matchingScore.timeDifference);
+};
+const applyGeoDetourFilter = async (baseResults, requester, campusCoords, timeField) => {
+    const detourResults = await mapWithConcurrency(baseResults, 5, async (entry) => {
+        if (entry.user.homeLat == null || entry.user.homeLng == null) {
+            return null;
+        }
+        const detour = await geoProvider.detourExtraMins({ lat: entry.user.homeLat, lng: entry.user.homeLng }, { lat: requester.homeLat, lng: requester.homeLng }, campusCoords);
+        const maxDetour = timeField === 'toCampusMins'
+            ? entry.toCampusMaxDetourMins
+            : entry.goHomeMaxDetourMins;
+        if (detour.extraMins > maxDetour) {
+            return null;
+        }
+        return {
+            ...entry,
+            geoInfo: {
+                baseMins: detour.baseMins,
+                viaMins: detour.viaMins,
+                extraDetourMins: detour.extraMins
+            }
+        };
+    });
+    return detourResults.filter((entry) => entry !== null);
+};
+const sortResults = (results) => {
+    return results.sort((a, b) => {
+        const extraDiff = a.geoInfo.extraDetourMins - b.geoInfo.extraDetourMins;
+        if (extraDiff !== 0) {
+            return extraDiff;
+        }
+        return a.matchingScore.timeDifference - b.matchingScore.timeDifference;
+    });
+};
+// Shared matching function
+const matchByTimeField = async (params) => {
+    const { userId, dayOfWeek, timeValue, flexibilityMins, timeField, targetRoleGroup } = params;
+    // Convert time string to minutes
+    const timeMins = (0, timeUtils_1.timeToMinutes)(timeValue);
+    // Get user's info - this will throw USER_NOT_FOUND if missing
+    const user = await getRequesterOrThrow(userId);
+    // Validate campus and get coordinates - let UNKNOWN_CAMPUS bubble up
+    const campusCoords = (0, campusCoords_1.getCampusCoords)(user.campus);
+    // Determine target roles and build time filter
+    const targetRoles = buildTargetRoles(targetRoleGroup);
+    const timeFilter = {
+        [timeField]: {
+            gte: timeMins - flexibilityMins,
+            lte: timeMins + flexibilityMins
+        }
+    };
+    // Query matching entries
+    const matchingEntries = await queryMatchingEntries({
+        dayOfWeek,
+        userCampus: user.campus,
+        userId,
+        targetRoles,
+        timeField,
+        timeFilter
+    });
+    // Build base results with matching scores
+    const baseResults = buildBaseResults(matchingEntries, timeField, timeMins);
+    // Check if requester has home coordinates for geo filtering
+    if (!user.homeLat || !user.homeLng) {
+        return {
+            results: baseResults.sort((a, b) => a.matchingScore.timeDifference - b.matchingScore.timeDifference),
+            geoNote: 'Geo filtering skipped: requester home location missing.'
+        };
+    }
+    // Apply geo detour filtering and sorting
+    const filteredResults = await applyGeoDetourFilter(baseResults, { homeLat: user.homeLat, homeLng: user.homeLng }, campusCoords, timeField);
+    return {
+        results: sortResults(filteredResults),
+        geoNote: undefined
+    };
+};
+// Helper functions for driver availability
+const parseDriverIdAndDay = (req) => {
+    const driverId = Array.isArray(req.params.driverId)
+        ? req.params.driverId[0]
+        : req.params.driverId;
+    const dayOfWeek = parseInt(req.params.dayOfWeek);
+    if (!driverId || isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
+        throw new Error('INVALID_PARAMS');
+    }
+    return { driverId, dayOfWeek };
+};
+const getActiveDriverOr404 = async (driverId) => {
+    return await prisma_1.prisma.user.findUnique({
+        where: {
+            id: driverId,
+            role: { in: [client_1.Role.DRIVER, client_1.Role.BOTH] },
+            isActive: true
+        },
+        select: {
+            id: true,
+            name: true,
+            photoUrl: true,
+            campus: true,
+            homeArea: true,
+            role: true,
+            timeZone: true
+        }
+    });
+};
+const getEnabledScheduleOr404 = async (driverId, dayOfWeek) => {
+    return await prisma_1.prisma.scheduleEntry.findFirst({
+        where: {
+            userId: driverId,
+            dayOfWeek,
+            enabled: true
+        }
+    });
 };
 const getDriverAvailability = async (req, res) => {
     try {
-        const driverId = Array.isArray(req.params.driverId)
-            ? req.params.driverId[0]
-            : req.params.driverId;
-        const dayOfWeek = parseInt(req.params.dayOfWeek);
-        if (!driverId || isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
-            res.status(400).json({
-                success: false,
-                message: 'Valid driver ID and day of week (0-6) are required'
-            });
-            return;
-        }
-        // Verify the user is a driver
-        const driver = await prisma_1.prisma.user.findUnique({
-            where: {
-                id: driverId,
-                role: { in: [client_1.Role.DRIVER, client_1.Role.BOTH] },
-                isActive: true
-            },
-            select: {
-                id: true,
-                name: true,
-                photoUrl: true,
-                campus: true,
-                homeArea: true,
-                role: true,
-                timeZone: true
-            }
-        });
+        const { driverId, dayOfWeek } = parseDriverIdAndDay(req);
+        const driver = await getActiveDriverOr404(driverId);
         if (!driver) {
             res.status(404).json({
                 success: false,
@@ -156,14 +246,7 @@ const getDriverAvailability = async (req, res) => {
             });
             return;
         }
-        // Use findFirst to check enabled status in query
-        const scheduleEntry = await prisma_1.prisma.scheduleEntry.findFirst({
-            where: {
-                userId: driverId,
-                dayOfWeek,
-                enabled: true
-            }
-        });
+        const scheduleEntry = await getEnabledScheduleOr404(driverId, dayOfWeek);
         if (!scheduleEntry) {
             res.status(404).json({
                 success: false,
@@ -184,6 +267,13 @@ const getDriverAvailability = async (req, res) => {
         });
     }
     catch (error) {
+        if (error instanceof Error && error.message === 'INVALID_PARAMS') {
+            res.status(400).json({
+                success: false,
+                message: 'Valid driver ID and day of week (0-6) are required'
+            });
+            return;
+        }
         handleControllerError(res, error, 'Failed to fetch driver availability');
     }
 };
@@ -206,7 +296,7 @@ const findOptimalDriversToCampus = async (req, res) => {
             });
             return;
         }
-        const results = await matchByTimeField({
+        const { results, geoNote } = await matchByTimeField({
             userId,
             dayOfWeek: value.dayOfWeek,
             timeValue: value.toCampusTime,
@@ -219,13 +309,22 @@ const findOptimalDriversToCampus = async (req, res) => {
             message: `Found ${results.length} to-campus compatible drivers`,
             data: {
                 drivers: results,
-                note: 'Geo-based filtering will be implemented with distance API integration'
+                note: geoNote || 'Geo-based filtering will be implemented with distance API integration'
             }
         });
     }
     catch (error) {
         if (error instanceof Error && error.message === 'USER_NOT_FOUND') {
             handleUserNotFound(res);
+            return;
+        }
+        if (error instanceof Error && error.message.startsWith('UNKNOWN_CAMPUS:')) {
+            const campus = error.message.substring('UNKNOWN_CAMPUS:'.length);
+            res.status(400).json({
+                success: false,
+                message: `Unknown campus: ${campus}`,
+                allowed: campusCoords_1.CAMPUS_NAMES
+            });
             return;
         }
         handleControllerError(res, error, 'Failed to find optimal to-campus drivers');
@@ -250,7 +349,7 @@ const findOptimalDriversGoHome = async (req, res) => {
             });
             return;
         }
-        const results = await matchByTimeField({
+        const { results, geoNote } = await matchByTimeField({
             userId,
             dayOfWeek: value.dayOfWeek,
             timeValue: value.goHomeTime,
@@ -263,13 +362,22 @@ const findOptimalDriversGoHome = async (req, res) => {
             message: `Found ${results.length} go-home compatible drivers`,
             data: {
                 drivers: results,
-                note: 'Geo-based filtering will be implemented with distance API integration'
+                note: geoNote || 'Geo-based filtering will be implemented with distance API integration'
             }
         });
     }
     catch (error) {
         if (error instanceof Error && error.message === 'USER_NOT_FOUND') {
             handleUserNotFound(res);
+            return;
+        }
+        if (error instanceof Error && error.message.startsWith('UNKNOWN_CAMPUS:')) {
+            const campus = error.message.substring('UNKNOWN_CAMPUS:'.length);
+            res.status(400).json({
+                success: false,
+                message: `Unknown campus: ${campus}`,
+                allowed: campusCoords_1.CAMPUS_NAMES
+            });
             return;
         }
         handleControllerError(res, error, 'Failed to find optimal go-home drivers');
@@ -294,7 +402,7 @@ const findOptimalPassengersToCampus = async (req, res) => {
             });
             return;
         }
-        const results = await matchByTimeField({
+        const { results, geoNote } = await matchByTimeField({
             userId,
             dayOfWeek: value.dayOfWeek,
             timeValue: value.toCampusTime,
@@ -307,13 +415,22 @@ const findOptimalPassengersToCampus = async (req, res) => {
             message: `Found ${results.length} to-campus compatible passengers`,
             data: {
                 passengers: results,
-                note: 'Geo-based filtering will be implemented with distance API integration'
+                note: geoNote || 'Geo-based filtering will be implemented with distance API integration'
             }
         });
     }
     catch (error) {
         if (error instanceof Error && error.message === 'USER_NOT_FOUND') {
             handleUserNotFound(res);
+            return;
+        }
+        if (error instanceof Error && error.message.startsWith('UNKNOWN_CAMPUS:')) {
+            const campus = error.message.substring('UNKNOWN_CAMPUS:'.length);
+            res.status(400).json({
+                success: false,
+                message: `Unknown campus: ${campus}`,
+                allowed: campusCoords_1.CAMPUS_NAMES
+            });
             return;
         }
         handleControllerError(res, error, 'Failed to find optimal to-campus passengers');
@@ -338,7 +455,7 @@ const findOptimalPassengersGoHome = async (req, res) => {
             });
             return;
         }
-        const results = await matchByTimeField({
+        const { results, geoNote } = await matchByTimeField({
             userId,
             dayOfWeek: value.dayOfWeek,
             timeValue: value.goHomeTime,
@@ -351,13 +468,22 @@ const findOptimalPassengersGoHome = async (req, res) => {
             message: `Found ${results.length} go-home compatible passengers`,
             data: {
                 passengers: results,
-                note: 'Geo-based filtering will be implemented with distance API integration'
+                note: geoNote || 'Geo-based filtering will be implemented with distance API integration'
             }
         });
     }
     catch (error) {
         if (error instanceof Error && error.message === 'USER_NOT_FOUND') {
             handleUserNotFound(res);
+            return;
+        }
+        if (error instanceof Error && error.message.startsWith('UNKNOWN_CAMPUS:')) {
+            const campus = error.message.substring('UNKNOWN_CAMPUS:'.length);
+            res.status(400).json({
+                success: false,
+                message: `Unknown campus: ${campus}`,
+                allowed: campusCoords_1.CAMPUS_NAMES
+            });
             return;
         }
         handleControllerError(res, error, 'Failed to find optimal go-home passengers');

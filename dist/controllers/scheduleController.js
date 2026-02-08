@@ -13,6 +13,8 @@ const createScheduleEntrySchema = joi_1.default.object({
     goHomeMins: joi_1.default.number().integer().min(0).max(1439).required(),
     toCampusFlexMin: joi_1.default.number().integer().min(0).max(120).default(15),
     goHomeFlexMin: joi_1.default.number().integer().min(0).max(120).default(15),
+    toCampusMaxDetourMins: joi_1.default.number().integer().min(0).max(120).default(10),
+    goHomeMaxDetourMins: joi_1.default.number().integer().min(0).max(120).default(10),
     enabled: joi_1.default.boolean().default(true)
 });
 const updateScheduleEntrySchema = joi_1.default.object({
@@ -20,6 +22,8 @@ const updateScheduleEntrySchema = joi_1.default.object({
     goHomeMins: joi_1.default.number().integer().min(0).max(1439).optional(),
     toCampusFlexMin: joi_1.default.number().integer().min(0).max(120).optional(),
     goHomeFlexMin: joi_1.default.number().integer().min(0).max(120).optional(),
+    toCampusMaxDetourMins: joi_1.default.number().integer().min(0).max(120).optional(),
+    goHomeMaxDetourMins: joi_1.default.number().integer().min(0).max(120).optional(),
     enabled: joi_1.default.boolean().optional()
 });
 // Helper function to convert time string to minutes since midnight
@@ -304,6 +308,7 @@ exports.deleteScheduleEntry = deleteScheduleEntry;
 // Bulk create/update schedule entries for all days of the week
 const createWeeklySchedule = async (req, res) => {
     try {
+        console.log("123456789", req.body);
         const userId = Array.isArray(req.params.userId)
             ? req.params.userId[0]
             : req.params.userId;
@@ -320,6 +325,8 @@ const createWeeklySchedule = async (req, res) => {
             goHomeMins: joi_1.default.number().integer().min(0).max(1439).required(),
             toCampusFlexMin: joi_1.default.number().integer().min(0).max(120).default(15),
             goHomeFlexMin: joi_1.default.number().integer().min(0).max(120).default(15),
+            toCampusMaxDetourMins: joi_1.default.number().integer().min(0).max(120).default(10),
+            goHomeMaxDetourMins: joi_1.default.number().integer().min(0).max(120).default(10),
             enabled: joi_1.default.boolean().default(true)
         })).min(1).max(7);
         const { error, value: scheduleEntries } = weeklyScheduleSchema.validate(req.body);
@@ -358,6 +365,8 @@ const createWeeklySchedule = async (req, res) => {
                         goHomeMins: entry.goHomeMins,
                         toCampusFlexMin: entry.toCampusFlexMin,
                         goHomeFlexMin: entry.goHomeFlexMin,
+                        toCampusMaxDetourMins: entry.toCampusMaxDetourMins,
+                        goHomeMaxDetourMins: entry.goHomeMaxDetourMins,
                         enabled: entry.enabled
                     },
                     create: {

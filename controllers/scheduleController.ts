@@ -9,6 +9,8 @@ const createScheduleEntrySchema = Joi.object({
   goHomeMins: Joi.number().integer().min(0).max(1439).required(),
   toCampusFlexMin: Joi.number().integer().min(0).max(120).default(15),
   goHomeFlexMin: Joi.number().integer().min(0).max(120).default(15),
+  toCampusMaxDetourMins: Joi.number().integer().min(0).max(120).default(10),
+  goHomeMaxDetourMins: Joi.number().integer().min(0).max(120).default(10),
   enabled: Joi.boolean().default(true)
 });
 
@@ -17,6 +19,8 @@ const updateScheduleEntrySchema = Joi.object({
   goHomeMins: Joi.number().integer().min(0).max(1439).optional(),
   toCampusFlexMin: Joi.number().integer().min(0).max(120).optional(),
   goHomeFlexMin: Joi.number().integer().min(0).max(120).optional(),
+  toCampusMaxDetourMins: Joi.number().integer().min(0).max(120).optional(),
+  goHomeMaxDetourMins: Joi.number().integer().min(0).max(120).optional(),
   enabled: Joi.boolean().optional()
 });
 
@@ -332,6 +336,7 @@ export const deleteScheduleEntry = async (req: Request, res: Response): Promise<
 // Bulk create/update schedule entries for all days of the week
 export const createWeeklySchedule = async (req: Request, res: Response): Promise<void> => {
   try {
+    console.log("123456789", req.body);
     const userId = Array.isArray(req.params.userId) 
       ? req.params.userId[0] 
       : req.params.userId;
@@ -342,6 +347,7 @@ export const createWeeklySchedule = async (req: Request, res: Response): Promise
       });
       return;
     }
+    
 
     const weeklyScheduleSchema = Joi.array().items(
       Joi.object({
@@ -350,6 +356,8 @@ export const createWeeklySchedule = async (req: Request, res: Response): Promise
         goHomeMins: Joi.number().integer().min(0).max(1439).required(),
         toCampusFlexMin: Joi.number().integer().min(0).max(120).default(15),
         goHomeFlexMin: Joi.number().integer().min(0).max(120).default(15),
+        toCampusMaxDetourMins: Joi.number().integer().min(0).max(120).default(10),
+        goHomeMaxDetourMins: Joi.number().integer().min(0).max(120).default(10),
         enabled: Joi.boolean().default(true)
       })
     ).min(1).max(7);
@@ -394,6 +402,8 @@ export const createWeeklySchedule = async (req: Request, res: Response): Promise
             goHomeMins: entry.goHomeMins,
             toCampusFlexMin: entry.toCampusFlexMin,
             goHomeFlexMin: entry.goHomeFlexMin,
+            toCampusMaxDetourMins: entry.toCampusMaxDetourMins,
+            goHomeMaxDetourMins: entry.goHomeMaxDetourMins,
             enabled: entry.enabled
           },
           create: {

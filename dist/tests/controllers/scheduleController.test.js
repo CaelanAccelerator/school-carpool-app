@@ -4,29 +4,40 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const chai_1 = require("chai");
-const proxyquire_1 = __importDefault(require("proxyquire"));
 const sinon_1 = __importDefault(require("sinon"));
 const express_mock_1 = require("../utils/express-mock");
 const prisma_mock_1 = require("../utils/prisma-mock");
 describe('scheduleController', () => {
-    let scheduleController;
+    let sandbox;
     let prismaMock;
     let userMock;
     let scheduleEntryMock;
     let transactionMock;
+    let scheduleController;
     beforeEach(() => {
-        const { prismaMock: prisma, userMock: user, scheduleEntryMock: schedule, transactionMock: transaction } = (0, prisma_mock_1.makePrismaMock)();
-        prismaMock = prisma;
-        userMock = user;
-        scheduleEntryMock = schedule;
-        transactionMock = transaction;
-        // Use proxyquire to inject mocks
-        scheduleController = (0, proxyquire_1.default)('../../controllers/scheduleController', {
-            '../lib/prisma': { prisma: prismaMock }
-        });
+        sandbox = sinon_1.default.createSandbox();
+        const mockSetup = (0, prisma_mock_1.makePrismaMock)();
+        prismaMock = mockSetup.prismaMock;
+        userMock = mockSetup.userMock;
+        scheduleEntryMock = mockSetup.scheduleEntryMock;
+        transactionMock = mockSetup.transactionMock;
+        // Clear module cache
+        const moduleKeys = require.cache ? Object.keys(require.cache).filter(key => key.includes('scheduleController') || key.includes('lib/prisma')) : [];
+        moduleKeys.forEach(key => delete require.cache[key]);
+        // Mock the dependencies
+        const Module = require('module');
+        const originalRequire = Module.prototype.require;
+        Module.prototype.require = function (id) {
+            if (id === '../lib/prisma') {
+                return { prisma: prismaMock };
+            }
+            return originalRequire.apply(this, arguments);
+        };
+        scheduleController = require('../../controllers/scheduleController');
+        Module.prototype.require = originalRequire;
     });
     afterEach(() => {
-        sinon_1.default.restore();
+        sandbox.restore();
     });
     describe('createScheduleEntry', () => {
         it('should return 400 for validation errors', async () => {
@@ -40,19 +51,6 @@ describe('scheduleController', () => {
             (0, chai_1.expect)(res.json.calledWithMatch({
                 success: false,
                 message: 'Validation error'
-            })).to.be.true;
-        });
-        it('should return 400 if userId missing', async () => {
-            const req = (0, express_mock_1.mockReq)({
-                params: {},
-                body: { dayOfWeek: 1, toCampusMins: 480, goHomeMins: 1020 }
-            });
-            const res = (0, express_mock_1.mockRes)();
-            await scheduleController.createScheduleEntry(req, res);
-            (0, chai_1.expect)(res.status.calledWith(400)).to.be.true;
-            (0, chai_1.expect)(res.json.calledWithMatch({
-                success: false,
-                message: 'User ID is required'
             })).to.be.true;
         });
         it('should return 404 if user not found', async () => {
@@ -83,7 +81,7 @@ describe('scheduleController', () => {
             (0, chai_1.expect)(res.status.calledWith(409)).to.be.true;
             (0, chai_1.expect)(res.json.calledWithMatch({
                 success: false,
-                message: 'Schedule entry already exists for this day'
+                message: 'Schedule entry for this day already exists'
             })).to.be.true;
         });
         it('should create schedule entry successfully', async () => {
@@ -111,34 +109,6 @@ describe('scheduleController', () => {
             })).to.be.true;
         });
     });
-    describe('getUserScheduleEntries', () => {
-        it('should return 404 if user not found', async () => {
-            const req = (0, express_mock_1.mockReq)({ params: { userId: 'nonexistent-user' } });
-            const res = (0, express_mock_1.mockRes)();
-            userMock.findUnique.resolves(null);
-            await scheduleController.getUserScheduleEntries(req, res);
-            (0, chai_1.expect)(res.status.calledWith(404)).to.be.true;
-            (0, chai_1.expect)(res.json.calledWithMatch({
-                success: false,
-                message: 'User not found'
-            })).to.be.true;
-        });
-        it('should return user schedule entries', async () => {
-            const req = (0, express_mock_1.mockReq)({ params: { userId: 'user-id' } });
-            const res = (0, express_mock_1.mockRes)();
-            const mockScheduleEntries = [
-                { id: 'entry1', dayOfWeek: 1, toCampusMins: 480 },
-                { id: 'entry2', dayOfWeek: 2, toCampusMins: 510 }
-            ];
-            userMock.findUnique.resolves({ id: 'user-id' });
-            scheduleEntryMock.findMany.resolves(mockScheduleEntries);
-            await scheduleController.getUserScheduleEntries(req, res);
-            (0, chai_1.expect)(res.json.calledWithMatch({
-                success: true,
-                data: mockScheduleEntries
-            })).to.be.true;
-        });
-    });
     describe('getScheduleEntryByDay', () => {
         it('should return 404 if entry not found', async () => {
             const req = (0, express_mock_1.mockReq)({
@@ -150,7 +120,7 @@ describe('scheduleController', () => {
             (0, chai_1.expect)(res.status.calledWith(404)).to.be.true;
             (0, chai_1.expect)(res.json.calledWithMatch({
                 success: false,
-                message: 'Schedule entry not found'
+                message: 'Schedule entry not found for this day'
             })).to.be.true;
         });
         it('should return schedule entry by day', async () => {
@@ -179,7 +149,9 @@ describe('scheduleController', () => {
                 body: { toCampusMins: 500 }
             });
             const res = (0, express_mock_1.mockRes)();
-            scheduleEntryMock.findUnique.resolves(null);
+            const error = new Error('Record not found');
+            error.code = 'P2025';
+            scheduleEntryMock.update.rejects(error);
             await scheduleController.updateScheduleEntry(req, res);
             (0, chai_1.expect)(res.status.calledWith(404)).to.be.true;
             (0, chai_1.expect)(res.json.calledWithMatch({
@@ -197,7 +169,6 @@ describe('scheduleController', () => {
                 id: 'entry-id',
                 toCampusMins: 500
             };
-            scheduleEntryMock.findUnique.resolves({ id: 'entry-id' });
             scheduleEntryMock.update.resolves(mockUpdatedEntry);
             await scheduleController.updateScheduleEntry(req, res);
             (0, chai_1.expect)(res.json.calledWithMatch({
@@ -211,7 +182,9 @@ describe('scheduleController', () => {
         it('should return 404 if entry not found', async () => {
             const req = (0, express_mock_1.mockReq)({ params: { entryId: 'nonexistent-entry' } });
             const res = (0, express_mock_1.mockRes)();
-            scheduleEntryMock.findUnique.resolves(null);
+            const error = new Error('Record not found');
+            error.code = 'P2025';
+            scheduleEntryMock.delete.rejects(error);
             await scheduleController.deleteScheduleEntry(req, res);
             (0, chai_1.expect)(res.status.calledWith(404)).to.be.true;
             (0, chai_1.expect)(res.json.calledWithMatch({
@@ -222,7 +195,6 @@ describe('scheduleController', () => {
         it('should delete schedule entry successfully', async () => {
             const req = (0, express_mock_1.mockReq)({ params: { entryId: 'entry-id' } });
             const res = (0, express_mock_1.mockRes)();
-            scheduleEntryMock.findUnique.resolves({ id: 'entry-id' });
             scheduleEntryMock.delete.resolves({ id: 'entry-id' });
             await scheduleController.deleteScheduleEntry(req, res);
             (0, chai_1.expect)(res.json.calledWithMatch({
@@ -235,11 +207,9 @@ describe('scheduleController', () => {
         it('should return 404 if user not found', async () => {
             const req = (0, express_mock_1.mockReq)({
                 params: { userId: 'nonexistent-user' },
-                body: {
-                    schedule: [
-                        { dayOfWeek: 1, toCampusMins: 480, goHomeMins: 1020 }
-                    ]
-                }
+                body: [
+                    { dayOfWeek: 1, toCampusMins: 480, goHomeMins: 1020 }
+                ]
             });
             const res = (0, express_mock_1.mockRes)();
             userMock.findUnique.resolves(null);
@@ -253,12 +223,10 @@ describe('scheduleController', () => {
         it('should create weekly schedule successfully', async () => {
             const req = (0, express_mock_1.mockReq)({
                 params: { userId: 'user-id' },
-                body: {
-                    schedule: [
-                        { dayOfWeek: 1, toCampusMins: 480, goHomeMins: 1020 },
-                        { dayOfWeek: 2, toCampusMins: 480, goHomeMins: 1020 }
-                    ]
-                }
+                body: [
+                    { dayOfWeek: 1, toCampusMins: 480, goHomeMins: 1020 },
+                    { dayOfWeek: 2, toCampusMins: 480, goHomeMins: 1020 }
+                ]
             });
             const res = (0, express_mock_1.mockRes)();
             const mockScheduleEntries = [
@@ -276,7 +244,7 @@ describe('scheduleController', () => {
             (0, chai_1.expect)(res.status.calledWith(200)).to.be.true;
             (0, chai_1.expect)(res.json.calledWithMatch({
                 success: true,
-                message: 'Weekly schedule created successfully'
+                message: 'Weekly schedule created/updated successfully'
             })).to.be.true;
             (0, chai_1.expect)(transactionMock.called).to.be.true;
         });

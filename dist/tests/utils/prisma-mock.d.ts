@@ -16,6 +16,7 @@ export declare const makePrismaMock: () => {
         scheduleEntry: {
             create: sinon.SinonStub<any[], any>;
             findUnique: sinon.SinonStub<any[], any>;
+            findFirst: sinon.SinonStub<any[], any>;
             findMany: sinon.SinonStub<any[], any>;
             update: sinon.SinonStub<any[], any>;
             delete: sinon.SinonStub<any[], any>;
@@ -34,6 +35,7 @@ export declare const makePrismaMock: () => {
     scheduleEntryMock: {
         create: sinon.SinonStub<any[], any>;
         findUnique: sinon.SinonStub<any[], any>;
+        findFirst: sinon.SinonStub<any[], any>;
         findMany: sinon.SinonStub<any[], any>;
         update: sinon.SinonStub<any[], any>;
         delete: sinon.SinonStub<any[], any>;

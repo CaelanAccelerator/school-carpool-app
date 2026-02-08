@@ -25,6 +25,18 @@ enum ConnectionStatus {
   REJECTED
 }
 
+enum TripDirection {
+  TO_CAMPUS
+  GO_HOME
+}
+
+enum RideRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
 model User {
   id           String      @id @default(cuid())
   email        String      @unique
@@ -40,12 +52,19 @@ model User {
   role         Role        @default(BOTH)
   timeZone     String      @default("America/Vancouver")
 
+  homeAddress  String?
+  homeLat      Float?
+  homeLng      Float?
+
   isActive     Boolean     @default(true)
 
   schedule     ScheduleEntry[]
 
   sentConnections     ConnectionRequest[] @relation("SentConnections")
   receivedConnections ConnectionRequest[] @relation("ReceivedConnections")
+  
+  sentRideRequests     RideRequest[] @relation("SentRideRequests")
+  receivedRideRequests RideRequest[] @relation("ReceivedRideRequests")
 
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -70,6 +89,10 @@ model ScheduleEntry {
   toCampusFlexMin Int      @default(15)
   goHomeFlexMin   Int      @default(15)
 
+  // detour tolerance, used by matching logic
+  toCampusMaxDetourMins Int @default(10)
+  goHomeMaxDetourMins   Int @default(10)
+
   enabled         Boolean  @default(true)
 
   createdAt       DateTime @default(now())
@@ -78,6 +101,31 @@ model ScheduleEntry {
   @@unique([userId, dayOfWeek])
   @@index([dayOfWeek, toCampusMins])
   @@index([dayOfWeek, goHomeMins])
+}
+
+model RideRequest {
+  id          String            @id @default(cuid())
+  
+  fromUserId  String
+  toUserId    String
+  dayOfWeek   Int              // 0..6 (0 = Sunday)
+  direction   TripDirection
+  
+  fromUser    User             @relation("SentRideRequests", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser      User             @relation("ReceivedRideRequests", fields: [toUserId], references: [id], onDelete: Cascade)
+  
+  message     String?
+  status      RideRequestStatus @default(PENDING)
+  driverNote  String?
+  respondedAt DateTime?
+  
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  
+  // Business key uniqueness
+  @@unique([fromUserId, toUserId, dayOfWeek, direction])
+  @@index([toUserId, status, createdAt]) // for inbox queries
+  @@index([fromUserId, status, createdAt]) // for outbox queries
 }
 
 model ConnectionRequest {

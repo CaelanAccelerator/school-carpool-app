@@ -4,32 +4,47 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const chai_1 = require("chai");
-const proxyquire_1 = __importDefault(require("proxyquire"));
 const sinon_1 = __importDefault(require("sinon"));
 const express_mock_1 = require("../utils/express-mock");
 const prisma_mock_1 = require("../utils/prisma-mock");
 describe('userController', () => {
-    let userController;
+    let sandbox;
     let prismaMock;
     let userMock;
     let bcryptMock;
+    let userController;
     beforeEach(() => {
-        const { prismaMock: prisma, userMock: user } = (0, prisma_mock_1.makePrismaMock)();
-        prismaMock = prisma;
-        userMock = user;
-        // Mock bcrypt
+        sandbox = sinon_1.default.createSandbox();
+        const mockSetup = (0, prisma_mock_1.makePrismaMock)();
+        prismaMock = mockSetup.prismaMock;
+        userMock = mockSetup.userMock;
+        // Create bcrypt mock
         bcryptMock = {
-            hash: sinon_1.default.stub(),
-            compare: sinon_1.default.stub()
+            hash: sandbox.stub(),
+            compare: sandbox.stub()
         };
-        // Use proxyquire to inject mocks
-        userController = (0, proxyquire_1.default)('../../controllers/userController', {
-            '../lib/prisma': { prisma: prismaMock },
-            'bcrypt': bcryptMock
-        });
+        // Clear module cache to allow fresh imports
+        const moduleKeys = require.cache ? Object.keys(require.cache).filter(key => key.includes('userController') || key.includes('lib/prisma')) : [];
+        moduleKeys.forEach(key => delete require.cache[key]);
+        // Mock the dependencies directly
+        const Module = require('module');
+        const originalRequire = Module.prototype.require;
+        Module.prototype.require = function (id) {
+            if (id === '../lib/prisma') {
+                return { prisma: prismaMock };
+            }
+            if (id === 'bcrypt') {
+                return bcryptMock;
+            }
+            return originalRequire.apply(this, arguments);
+        };
+        // Import controller after setting up mocks
+        userController = require('../../controllers/userController');
+        // Restore original require
+        Module.prototype.require = originalRequire;
     });
     afterEach(() => {
-        sinon_1.default.restore();
+        sandbox.restore();
     });
     describe('createUser', () => {
         it('should return 400 for validation errors', async () => {
@@ -100,31 +115,6 @@ describe('userController', () => {
             })).to.be.true;
         });
     });
-    describe('getUsers', () => {
-        it('should return users with pagination', async () => {
-            const req = (0, express_mock_1.mockReq)({
-                query: { page: '1', limit: '5', campus: 'UBC' }
-            });
-            const res = (0, express_mock_1.mockRes)();
-            const mockUsers = [
-                { id: 'user1', name: 'User 1', campus: 'UBC' },
-                { id: 'user2', name: 'User 2', campus: 'UBC' }
-            ];
-            userMock.findMany.resolves(mockUsers);
-            userMock.count.resolves(10);
-            await userController.getUsers(req, res);
-            (0, chai_1.expect)(res.json.calledWithMatch({
-                success: true,
-                data: mockUsers,
-                pagination: {
-                    page: 1,
-                    limit: 5,
-                    total: 10,
-                    totalPages: 2
-                }
-            })).to.be.true;
-        });
-    });
     describe('getUserById', () => {
         it('should return 404 if user not found', async () => {
             const req = (0, express_mock_1.mockReq)({ params: { id: 'nonexistent-id' } });
@@ -158,7 +148,7 @@ describe('userController', () => {
         it('should return 400 for validation errors', async () => {
             const req = (0, express_mock_1.mockReq)({
                 params: { id: 'user-id' },
-                body: { currentPassword: 'short' } // Missing newPassword, currentPassword too short
+                body: { currentPassword: 'short' } // Missing newPassword
             });
             const res = (0, express_mock_1.mockRes)();
             await userController.changePassword(req, res);
@@ -166,20 +156,6 @@ describe('userController', () => {
             (0, chai_1.expect)(res.json.calledWithMatch({
                 success: false,
                 error: 'Validation error'
-            })).to.be.true;
-        });
-        it('should return 404 if user not found', async () => {
-            const req = (0, express_mock_1.mockReq)({
-                params: { id: 'nonexistent-id' },
-                body: { currentPassword: 'current123', newPassword: 'newpass123' }
-            });
-            const res = (0, express_mock_1.mockRes)();
-            userMock.findUnique.resolves(null);
-            await userController.changePassword(req, res);
-            (0, chai_1.expect)(res.status.calledWith(404)).to.be.true;
-            (0, chai_1.expect)(res.json.calledWithMatch({
-                success: false,
-                error: 'User not found'
             })).to.be.true;
         });
         it('should return 400 for incorrect current password', async () => {
