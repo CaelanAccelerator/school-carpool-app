@@ -190,7 +190,7 @@ const UserProfile: React.FC = () => {
     []
   );
 
-  const loadGoogleMaps = () => {
+  const loadGoogleMaps = useCallback(() => {
     if (window.google?.maps) {
       return Promise.resolve();
     }
@@ -216,17 +216,17 @@ const UserProfile: React.FC = () => {
       script.onerror = () => reject(new Error('Failed to load Google Maps'));
       document.body.appendChild(script);
     });
-  };
+  }, [mapsApiKey]);
 
-  const updateLatLng = (lat: number, lng: number) => {
+  const updateLatLng = useCallback((lat: number, lng: number) => {
     setFormData((prev) => ({
       ...prev,
       homeLat: lat.toFixed(6),
       homeLng: lng.toFixed(6)
     }));
-  };
+  }, []);
 
-  const ensureMapInitialized = (center: { lat: number; lng: number }, zoom: number) => {
+  const ensureMapInitialized = useCallback((center: { lat: number; lng: number }, zoom: number) => {
     if (!mapContainerRef.current || !window.google?.maps) return;
 
     if (!mapRef.current) {
@@ -258,7 +258,7 @@ const UserProfile: React.FC = () => {
       mapRef.current.setZoom(zoom);
       markerRef.current.setPosition(center);
     }
-  };
+  }, [updateLatLng]);
 
   const handleGeocodeAddress = async () => {
     const address = formData.homeAddress.trim();
@@ -317,7 +317,7 @@ const UserProfile: React.FC = () => {
           severity: 'error'
         });
       });
-  }, [isEditing, formData.homeLat, formData.homeLng, mapsApiKey]);
+  }, [isEditing, formData.homeLat, formData.homeLng, ensureMapInitialized, loadGoogleMaps]);
 
   if (loading) {
     return (

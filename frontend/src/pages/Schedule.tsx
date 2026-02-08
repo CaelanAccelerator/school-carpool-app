@@ -15,7 +15,7 @@ import {
     TextField,
     Typography
 } from '@mui/material';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { scheduleService, userService } from '../services/api';
 import { ScheduleEntry, User } from '../types';
@@ -56,7 +56,7 @@ const Schedule: React.FC = () => {
     [entries]
   );
 
-  const loadSchedule = async () => {
+  const loadSchedule = useCallback(async () => {
     if (!currentUserId) return;
     setLoading(true);
     setError('');
@@ -73,11 +73,11 @@ const Schedule: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUserId]);
 
   useEffect(() => {
     loadSchedule();
-  }, [currentUserId]);
+  }, [currentUserId, loadSchedule]);
 
   const handleResetForm = () => {
     setDayOfWeek(1);

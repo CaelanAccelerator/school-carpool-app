@@ -10,7 +10,7 @@ import {
     Snackbar,
     Typography
 } from '@mui/material';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { rideRequestService } from '../services/api';
 import { RideRequest } from '../types';
@@ -34,7 +34,7 @@ const RideOutbox: React.FC = () => {
     [requests]
   );
 
-  const fetchOutbox = async () => {
+  const fetchOutbox = useCallback(async () => {
     if (!currentUserId || inFlightRef.current) return;
     inFlightRef.current = true;
     setLoading(true);
@@ -49,13 +49,13 @@ const RideOutbox: React.FC = () => {
       setLoading(false);
       inFlightRef.current = false;
     }
-  };
+  }, [currentUserId]);
 
   useEffect(() => {
     fetchOutbox();
     const intervalId = window.setInterval(fetchOutbox, 4000);
     return () => window.clearInterval(intervalId);
-  }, [currentUserId]);
+  }, [currentUserId, fetchOutbox]);
 
   const handleCancel = async (requestId: string) => {
     if (!currentUserId) return;

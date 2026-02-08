@@ -11,7 +11,7 @@ import {
     TextField,
     Typography
 } from '@mui/material';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { rideRequestService } from '../services/api';
 import { RideRequest } from '../types';
@@ -36,7 +36,7 @@ const RideInbox: React.FC = () => {
     [requests]
   );
 
-  const fetchInbox = async () => {
+  const fetchInbox = useCallback(async () => {
     if (!currentUserId || inFlightRef.current) return;
     inFlightRef.current = true;
     setLoading(true);
@@ -51,13 +51,13 @@ const RideInbox: React.FC = () => {
       setLoading(false);
       inFlightRef.current = false;
     }
-  };
+  }, [currentUserId]);
 
   useEffect(() => {
     fetchInbox();
     const intervalId = window.setInterval(fetchInbox, 4000);
     return () => window.clearInterval(intervalId);
-  }, [currentUserId]);
+  }, [currentUserId, fetchInbox]);
 
   const handleRespond = async (requestId: string, status: 'ACCEPTED' | 'REJECTED') => {
     if (!currentUserId) return;
