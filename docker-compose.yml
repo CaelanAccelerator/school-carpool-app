@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: carpool
+      POSTGRES_PASSWORD: carpool_pass
+      POSTGRES_DB: carpool
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://carpool:carpool_pass@db:5432/carpool?schema=public
+      PORT: "4321"
+      FRONTEND_URL: "*"
+      GEO_PROVIDER: "mock"
+    depends_on:
+      - db
+    ports:
+      - "4321:4321"
+    command: sh -c "npx prisma migrate deploy && node dist/bin/www.js"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_API_BASE_URL: /api
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  db_data:
