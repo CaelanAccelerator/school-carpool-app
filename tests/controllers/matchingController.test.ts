@@ -1,52 +1,27 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { mockReq, mockRes } from '../utils/express-mock';
-import { makePrismaMock } from '../utils/prisma-mock';
+import { AppError } from '../../lib/AppError';
+import { matchingService } from '../../services/matchingService';
+import {
+  findOptimalDriversToCampus,
+  findOptimalDriversGoHome,
+  findOptimalPassengersToCampus,
+  findOptimalPassengersGoHome,
+  getDriverAvailability
+} from '../../controllers/matchingController';
+
+const makeNext = (res: any) => (err?: any) => {
+  if (!err) return;
+  const status = (err instanceof AppError) ? err.statusCode : (err.status || 500);
+  res.status(status).json({ success: false, error: err.message });
+};
 
 describe('matchingController', () => {
   let sandbox: sinon.SinonSandbox;
-  let prismaMock: any;
-  let userMock: any;
-  let scheduleEntryMock: any;
-  let timeUtilsMock: any;
-  let matchingController: any;
 
   beforeEach(() => {
     sandbox = sinon.createSandbox();
-    
-    const mockSetup = makePrismaMock();
-    prismaMock = mockSetup.prismaMock;
-    userMock = mockSetup.userMock;
-    scheduleEntryMock = mockSetup.scheduleEntryMock;
-
-    // Mock time utilities
-    timeUtilsMock = {
-      timeToMinutes: sandbox.stub(),
-      minutesToTime: sandbox.stub()
-    };
-
-    // Clear module cache
-    const moduleKeys = require.cache ? Object.keys(require.cache).filter(key => 
-      key.includes('matchingController') || key.includes('lib/prisma') || key.includes('lib/timeUtils')
-    ) : [];
-    moduleKeys.forEach(key => delete require.cache[key]);
-
-    // Mock the dependencies
-    const Module = require('module');
-    const originalRequire = Module.prototype.require;
-    
-    Module.prototype.require = function(id: string) {
-      if (id === '../lib/prisma') {
-        return { prisma: prismaMock };
-      }
-      if (id === '../lib/timeUtils') {
-        return timeUtilsMock;
-      }
-      return originalRequire.apply(this, arguments);
-    };
-
-    matchingController = require('../../controllers/matchingController');
-    Module.prototype.require = originalRequire;
   });
 
   afterEach(() => {
@@ -55,314 +30,159 @@ describe('matchingController', () => {
 
   describe('findOptimalDriversToCampus', () => {
     it('should return 400 for invalid input', async () => {
-      const req = mockReq({
-        params: { userId: 'test-user-id' },
-        body: { dayOfWeek: 8, toCampusTime: 'invalid-time' } // Invalid values
-      });
-      const res = mockRes();
-
-      await matchingController.findOptimalDriversToCampus(req, res);
-
+      const req: any = mockReq({ params: { userId: 'test-user-id' }, body: { dayOfWeek: 8, toCampusTime: 'invalid-time' } });
+      const res: any = mockRes();
+      await findOptimalDriversToCampus(req, res, makeNext(res));
       expect(res.status.calledWith(400)).to.be.true;
-      expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', false);
+      expect(res.json.getCall(0).args[0]).to.have.property('success', false);
     });
 
     it('should return 404 if user not found', async () => {
-      const req = mockReq({
-        params: { userId: 'nonexistent-user' },
-        body: { dayOfWeek: 1, toCampusTime: '08:00', flexibilityMins: 15 }
-      });
-      const res = mockRes();
-
-      timeUtilsMock.timeToMinutes.returns(480);
-      userMock.findUnique.resolves(null);
-
-      await matchingController.findOptimalDriversToCampus(req, res);
-
+      const req: any = mockReq({ params: { userId: 'nonexistent-user' }, body: { dayOfWeek: 1, toCampusTime: '08:00', flexibilityMins: 15 } });
+      const res: any = mockRes();
+      sandbox.stub(matchingService, 'matchByTimeField').rejects(new AppError(404, 'User not found'));
+      await findOptimalDriversToCampus(req, res, makeNext(res));
       expect(res.status.calledWith(404)).to.be.true;
-      expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', false);
+      expect(res.json.getCall(0).args[0]).to.have.property('success', false);
     });
 
     it('should find optimal drivers successfully', async () => {
-      const req = mockReq({
-        params: { userId: 'test-user' },
-        body: { dayOfWeek: 1, toCampusTime: '08:00', flexibilityMins: 15 }
-      });
-      const res = mockRes();
-
-      const mockUser = { id: 'test-user', name: 'Test User', campus: 'Main Campus' };
-      const mockDrivers = [
-        { id: 'driver1', name: 'Driver 1', toCampusTimeMins: 480 },
-        { id: 'driver2', name: 'Driver 2', toCampusTimeMins: 490 }
-      ];
-
-      timeUtilsMock.timeToMinutes.returns(480);
-      userMock.findUnique.resolves(mockUser);
-      scheduleEntryMock.findMany.resolves(mockDrivers);
-
-      await matchingController.findOptimalDriversToCampus(req, res);
-
+      const req: any = mockReq({ params: { userId: 'test-user' }, body: { dayOfWeek: 1, toCampusTime: '08:00', flexibilityMins: 15 } });
+      const res: any = mockRes();
+      sandbox.stub(matchingService, 'matchByTimeField').resolves({
+        results: [{ id: 'driver1' }, { id: 'driver2' }],
+        geoNote: null
+      } as any);
+      await findOptimalDriversToCampus(req, res, makeNext(res));
       expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', true);
-      expect(jsonResponse).to.have.property('data');
+      expect(res.json.getCall(0).args[0]).to.have.property('success', true);
+      expect(res.json.getCall(0).args[0]).to.have.property('data');
     });
   });
 
   describe('findOptimalDriversGoHome', () => {
     it('should return 400 for invalid input', async () => {
-      const req = mockReq({
-        params: { userId: 'test-user-id' },
-        body: { dayOfWeek: 8, goHomeTime: 'invalid-time' } // Invalid values
-      });
-      const res = mockRes();
-
-      await matchingController.findOptimalDriversGoHome(req, res);
-
+      const req: any = mockReq({ params: { userId: 'test-user-id' }, body: { dayOfWeek: 8, goHomeTime: 'invalid-time' } });
+      const res: any = mockRes();
+      await findOptimalDriversGoHome(req, res, makeNext(res));
       expect(res.status.calledWith(400)).to.be.true;
-      expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', false);
+      expect(res.json.getCall(0).args[0]).to.have.property('success', false);
     });
 
     it('should return 404 if user not found', async () => {
-      const req = mockReq({
-        params: { userId: 'nonexistent-user' },
-        body: { dayOfWeek: 1, goHomeTime: '17:00', flexibilityMins: 30 }
-      });
-      const res = mockRes();
-
-      timeUtilsMock.timeToMinutes.returns(1020);
-      userMock.findUnique.resolves(null);
-
-      await matchingController.findOptimalDriversGoHome(req, res);
-
+      const req: any = mockReq({ params: { userId: 'nonexistent-user' }, body: { dayOfWeek: 1, goHomeTime: '17:00', flexibilityMins: 30 } });
+      const res: any = mockRes();
+      sandbox.stub(matchingService, 'matchByTimeField').rejects(new AppError(404, 'User not found'));
+      await findOptimalDriversGoHome(req, res, makeNext(res));
       expect(res.status.calledWith(404)).to.be.true;
-      expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', false);
+      expect(res.json.getCall(0).args[0]).to.have.property('success', false);
     });
 
     it('should find optimal drivers successfully', async () => {
-      const req = mockReq({
-        params: { userId: 'test-user' },
-        body: { dayOfWeek: 1, goHomeTime: '17:00', flexibilityMins: 30 }
-      });
-      const res = mockRes();
-
-      const mockUser = { id: 'test-user', name: 'Test User', campus: 'Main Campus' };
-      const mockDrivers = [
-        { id: 'driver1', name: 'Driver 1', goHomeMins: 1020 }
-      ];
-
-      timeUtilsMock.timeToMinutes.returns(1020);
-      userMock.findUnique.resolves(mockUser);
-      scheduleEntryMock.findMany.resolves(mockDrivers);
-
-      await matchingController.findOptimalDriversGoHome(req, res);
-
-      expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', true);
-      expect(jsonResponse).to.have.property('data');
+      const req: any = mockReq({ params: { userId: 'test-user' }, body: { dayOfWeek: 1, goHomeTime: '17:00', flexibilityMins: 30 } });
+      const res: any = mockRes();
+      sandbox.stub(matchingService, 'matchByTimeField').resolves({ results: [{ id: 'driver1' }], geoNote: null } as any);
+      await findOptimalDriversGoHome(req, res, makeNext(res));
+      expect(res.json.getCall(0).args[0]).to.have.property('success', true);
+      expect(res.json.getCall(0).args[0]).to.have.property('data');
     });
   });
 
   describe('findOptimalPassengersToCampus', () => {
     it('should return 400 for invalid input', async () => {
-      const req = mockReq({
-        params: { userId: 'test-user-id' },
-        body: { dayOfWeek: 8, toCampusTime: 'invalid-time' } // Invalid values
-      });
-      const res = mockRes();
-
-      await matchingController.findOptimalPassengersToCampus(req, res);
-
+      const req: any = mockReq({ params: { userId: 'test-user-id' }, body: { dayOfWeek: 8, toCampusTime: 'invalid-time' } });
+      const res: any = mockRes();
+      await findOptimalPassengersToCampus(req, res, makeNext(res));
       expect(res.status.calledWith(400)).to.be.true;
-      expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', false);
+      expect(res.json.getCall(0).args[0]).to.have.property('success', false);
     });
 
     it('should return 404 if user not found', async () => {
-      const req = mockReq({
-        params: { userId: 'nonexistent-user' },
-        body: { dayOfWeek: 1, toCampusTime: '08:00', flexibilityMins: 15 }
-      });
-      const res = mockRes();
-
-      timeUtilsMock.timeToMinutes.returns(480);
-      userMock.findUnique.resolves(null);
-
-      await matchingController.findOptimalPassengersToCampus(req, res);
-
+      const req: any = mockReq({ params: { userId: 'nonexistent-user' }, body: { dayOfWeek: 1, toCampusTime: '08:00', flexibilityMins: 15 } });
+      const res: any = mockRes();
+      sandbox.stub(matchingService, 'matchByTimeField').rejects(new AppError(404, 'User not found'));
+      await findOptimalPassengersToCampus(req, res, makeNext(res));
       expect(res.status.calledWith(404)).to.be.true;
-      expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', false);
+      expect(res.json.getCall(0).args[0]).to.have.property('success', false);
     });
 
     it('should find optimal passengers successfully', async () => {
-      const req = mockReq({
-        params: { userId: 'driver-user' },
-        body: { dayOfWeek: 1, toCampusTime: '08:00', flexibilityMins: 15 }
-      });
-      const res = mockRes();
-
-      const mockDriver = { id: 'driver-user', name: 'Driver User', campus: 'Main Campus' };
-      const mockPassengers = [
-        { id: 'passenger1', name: 'Passenger 1', toCampusMins: 480 }
-      ];
-
-      timeUtilsMock.timeToMinutes.returns(480);
-      userMock.findUnique.resolves(mockDriver);
-      scheduleEntryMock.findMany.resolves(mockPassengers);
-
-      await matchingController.findOptimalPassengersToCampus(req, res);
-
-      expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', true);
-      expect(jsonResponse).to.have.property('data');
+      const req: any = mockReq({ params: { userId: 'driver-user' }, body: { dayOfWeek: 1, toCampusTime: '08:00', flexibilityMins: 15 } });
+      const res: any = mockRes();
+      sandbox.stub(matchingService, 'matchByTimeField').resolves({ results: [{ id: 'passenger1' }], geoNote: null } as any);
+      await findOptimalPassengersToCampus(req, res, makeNext(res));
+      expect(res.json.getCall(0).args[0]).to.have.property('success', true);
+      expect(res.json.getCall(0).args[0]).to.have.property('data');
     });
   });
 
   describe('findOptimalPassengersGoHome', () => {
     it('should return 400 for invalid input', async () => {
-      const req = mockReq({
-        params: { userId: 'test-user-id' },
-        body: { dayOfWeek: 8, goHomeTime: 'invalid-time' } // Invalid values
-      });
-      const res = mockRes();
-
-      await matchingController.findOptimalPassengersGoHome(req, res);
-
+      const req: any = mockReq({ params: { userId: 'test-user-id' }, body: { dayOfWeek: 8, goHomeTime: 'invalid-time' } });
+      const res: any = mockRes();
+      await findOptimalPassengersGoHome(req, res, makeNext(res));
       expect(res.status.calledWith(400)).to.be.true;
-      expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', false);
+      expect(res.json.getCall(0).args[0]).to.have.property('success', false);
     });
 
     it('should return 404 if user not found', async () => {
-      const req = mockReq({
-        params: { userId: 'nonexistent-user' },
-        body: { dayOfWeek: 1, goHomeTime: '17:00', flexibilityMins: 30 }
-      });
-      const res = mockRes();
-
-      timeUtilsMock.timeToMinutes.returns(1020);
-      userMock.findUnique.resolves(null);
-
-      await matchingController.findOptimalPassengersGoHome(req, res);
-
+      const req: any = mockReq({ params: { userId: 'nonexistent-user' }, body: { dayOfWeek: 1, goHomeTime: '17:00', flexibilityMins: 30 } });
+      const res: any = mockRes();
+      sandbox.stub(matchingService, 'matchByTimeField').rejects(new AppError(404, 'User not found'));
+      await findOptimalPassengersGoHome(req, res, makeNext(res));
       expect(res.status.calledWith(404)).to.be.true;
-      expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', false);
+      expect(res.json.getCall(0).args[0]).to.have.property('success', false);
     });
 
     it('should find optimal passengers successfully', async () => {
-      const req = mockReq({
-        params: { userId: 'driver-user' },
-        body: { dayOfWeek: 1, goHomeTime: '17:00', flexibilityMins: 30 }
-      });
-      const res = mockRes();
-
-      const mockDriver = { id: 'driver-user', name: 'Driver User', campus: 'Main Campus' };
-      const mockPassengers = [
-        { id: 'passenger1', name: 'Passenger 1', goHomeMins: 1020 }
-      ];
-
-      timeUtilsMock.timeToMinutes.returns(1020);
-      userMock.findUnique.resolves(mockDriver);
-      scheduleEntryMock.findMany.resolves(mockPassengers);
-
-      await matchingController.findOptimalPassengersGoHome(req, res);
-
-      expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', true);
-      expect(jsonResponse).to.have.property('data');
+      const req: any = mockReq({ params: { userId: 'driver-user' }, body: { dayOfWeek: 1, goHomeTime: '17:00', flexibilityMins: 30 } });
+      const res: any = mockRes();
+      sandbox.stub(matchingService, 'matchByTimeField').resolves({ results: [{ id: 'passenger1' }], geoNote: null } as any);
+      await findOptimalPassengersGoHome(req, res, makeNext(res));
+      expect(res.json.getCall(0).args[0]).to.have.property('success', true);
+      expect(res.json.getCall(0).args[0]).to.have.property('data');
     });
   });
 
   describe('getDriverAvailability', () => {
     it('should return 400 for invalid input', async () => {
-      const req = mockReq({
-        params: { driverId: 'test-user-id', dayOfWeek: '8' } // Invalid day
-      });
-      const res = mockRes();
-
-      await matchingController.getDriverAvailability(req, res);
-
+      const req: any = mockReq({ params: { driverId: 'test-user-id', dayOfWeek: '8' } });
+      const res: any = mockRes();
+      await getDriverAvailability(req, res, makeNext(res));
       expect(res.status.calledWith(400)).to.be.true;
-      expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', false);
+      expect(res.json.getCall(0).args[0]).to.have.property('success', false);
     });
 
     it('should return 404 if driver not found', async () => {
-      const req = mockReq({
-        params: { driverId: 'nonexistent-driver', dayOfWeek: '1' }
-      });
-      const res = mockRes();
-
-      userMock.findUnique.resolves(null);
-
-      await matchingController.getDriverAvailability(req, res);
-
+      const req: any = mockReq({ params: { driverId: 'nonexistent-driver', dayOfWeek: '1' } });
+      const res: any = mockRes();
+      sandbox.stub(matchingService, 'getDriverAvailability').rejects(
+        new AppError(404, 'Driver not found or not available')
+      );
+      await getDriverAvailability(req, res, makeNext(res));
       expect(res.status.calledWith(404)).to.be.true;
-      expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', false);
+      expect(res.json.getCall(0).args[0]).to.have.property('success', false);
     });
 
     it('should return 404 if driver not available on specified day', async () => {
-      const req = mockReq({
-        params: { driverId: 'driver1', dayOfWeek: '1' }
-      });
-      const res = mockRes();
-
-      const mockDriver = { id: 'driver1', name: 'Driver 1' };
-      userMock.findUnique.resolves(mockDriver);
-      scheduleEntryMock.findFirst.resolves(null); // No availability
-
-      await matchingController.getDriverAvailability(req, res);
-
+      const req: any = mockReq({ params: { driverId: 'driver1', dayOfWeek: '1' } });
+      const res: any = mockRes();
+      sandbox.stub(matchingService, 'getDriverAvailability').rejects(
+        new AppError(404, 'Driver not found or not available')
+      );
+      await getDriverAvailability(req, res, makeNext(res));
       expect(res.status.calledWith(404)).to.be.true;
-      expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', false);
+      expect(res.json.getCall(0).args[0]).to.have.property('success', false);
     });
 
     it('should return driver availability successfully', async () => {
-      const req = mockReq({
-        params: { driverId: 'driver1', dayOfWeek: '1' }
-      });
-      const res = mockRes();
-
-      const mockDriver = { id: 'driver1', name: 'Driver 1' };
-      const mockSchedule = { 
-        id: 'schedule1', 
-        userId: 'driver1',
-        dayOfWeek: 1,
-        toCampusMins: 480,
-        availableSeats: 3
-      };
-
-      userMock.findUnique.resolves(mockDriver);
-      scheduleEntryMock.findFirst.resolves(mockSchedule);
-
-      await matchingController.getDriverAvailability(req, res);
-
-      expect(res.json.called).to.be.true;
-      const jsonResponse = res.json.getCall(0).args[0];
-      expect(jsonResponse).to.have.property('success', true);
-      expect(jsonResponse).to.have.property('data');
+      const req: any = mockReq({ params: { driverId: 'driver1', dayOfWeek: '1' } });
+      const res: any = mockRes();
+      const mockData = { driver: { id: 'driver1' }, schedule: { dayOfWeek: 1, toCampusMins: 480 } };
+      sandbox.stub(matchingService, 'getDriverAvailability').resolves(mockData as any);
+      await getDriverAvailability(req, res, makeNext(res));
+      expect(res.json.getCall(0).args[0]).to.have.property('success', true);
+      expect(res.json.getCall(0).args[0]).to.have.property('data');
     });
   });
 });
