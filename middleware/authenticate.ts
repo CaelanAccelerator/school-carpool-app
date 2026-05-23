@@ -1,6 +1,14 @@
 import { NextFunction, Request, Response } from 'express';
 import { verifyAccessToken } from '../lib/auth/jwt';
 
+declare global {
+  namespace Express {
+    interface Request {
+      user?: { id: string; role: string };
+    }
+  }
+}
+
 export const authenticate = (req: Request, res: Response, next: NextFunction): void => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
