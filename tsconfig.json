@@ -16,9 +16,11 @@
   },
   "include": [
     "controllers/**/*",
-    "lib/**/*", 
+    "lib/**/*",
     "middleware/**/*",
     "routes/**/*",
+    "services/**/*",
+    "types/**/*",
     "tests/**/*",
     "bin/**/*",
     "app.ts"

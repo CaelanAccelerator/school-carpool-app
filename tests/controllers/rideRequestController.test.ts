@@ -64,12 +64,14 @@ describe('rideRequestController', () => {
         json: sinon.stub()
       };
 
+      const next = () => {};
+
       // First call
-      await upsertRideRequestByKey(req, res);
+      await upsertRideRequestByKey(req, res, next);
 
       // Second call with updated message
       req.body.message = 'Updated message';
-      await upsertRideRequestByKey(req, res);
+      await upsertRideRequestByKey(req, res, next);
 
       // Verify upsert was called twice
       expect(prismaMock.rideRequest.upsert.callCount).to.equal(2);
@@ -108,14 +110,15 @@ describe('rideRequestController', () => {
 
       const req: any = {
         params: { id: 'req1' },
-        body: { actorUserId: 'user3', status: 'ACCEPTED' } // Wrong user trying to respond
+        body: { status: 'ACCEPTED' },
+        user: { id: 'user3', role: 'BOTH' } // Wrong user trying to respond
       };
       const res: any = {
         status: sinon.stub().returnsThis(),
         json: sinon.stub()
       };
 
-      await respondToRideRequest(req, res);
+      await respondToRideRequest(req, res, () => {});
 
       expect(res.status.calledWith(403)).to.be.true;
       expect(res.json.calledWith({ 
@@ -182,7 +185,7 @@ describe('rideRequestController', () => {
         json: sinon.stub()
       };
 
-      await getRideRequestInbox(inboxReq, inboxRes);
+      await getRideRequestInbox(inboxReq, inboxRes, () => {});
 
       const inboxResponse = inboxRes.json.firstCall.args[0];
       expect(inboxResponse.success).to.be.true;
@@ -204,7 +207,7 @@ describe('rideRequestController', () => {
         json: sinon.stub()
       };
 
-      await getRideRequestOutbox(outboxReq, outboxRes);
+      await getRideRequestOutbox(outboxReq, outboxRes, () => {});
 
       const outboxResponse = outboxRes.json.firstCall.args[0];
       expect(outboxResponse.success).to.be.true;

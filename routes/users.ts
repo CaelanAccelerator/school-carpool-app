@@ -1,23 +1,26 @@
 import express from 'express';
 import {
-  createUser,
-  getUsers,
-  getUserById,
-  updateUser,
   changePassword,
+  createUser,
   deleteUser,
-  permanentDeleteUser
+  getUserById,
+  getUsers,
+  permanentDeleteUser,
+  updateUser
 } from '../controllers/userController';
+import { authenticate } from '../middleware';
 
 const router = express.Router();
 
-// User CRUD routes                   
-router.put('/', createUser);                     // PUT /users - Create user (idempotent)
-router.get('/', getUsers);                       // GET /users - Get all users with filtering
-router.get('/:id', getUserById);                 // GET /users/:id - Get user by ID
-router.put('/:id', updateUser);                  // PUT /users/:id - Update user
-router.patch('/:id/password', changePassword);   // PATCH /users/:id/password - Change password
-router.delete('/:id', deleteUser);               // DELETE /users/:id - Soft delete user
-router.delete('/:id/permanent', permanentDeleteUser); // DELETE /users/:id/permanent - Hard delete
+// Public: registration and read-only browsing
+router.put('/', createUser);
+router.get('/', getUsers);
+router.get('/:id', getUserById);
+
+// Protected: mutations
+router.put('/:id', authenticate, updateUser);
+router.patch('/:id/password', authenticate, changePassword);
+router.delete('/:id', authenticate, deleteUser);
+router.delete('/:id/permanent', authenticate, permanentDeleteUser);
 
 export default router;

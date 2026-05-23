@@ -66,6 +66,8 @@ model User {
   sentRideRequests     RideRequest[] @relation("SentRideRequests")
   receivedRideRequests RideRequest[] @relation("ReceivedRideRequests")
 
+  refreshTokens RefreshToken[]
+
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -126,6 +128,17 @@ model RideRequest {
   @@unique([fromUserId, toUserId, dayOfWeek, direction])
   @@index([toUserId, status, createdAt]) // for inbox queries
   @@index([fromUserId, status, createdAt]) // for outbox queries
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model ConnectionRequest {

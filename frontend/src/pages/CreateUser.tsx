@@ -12,7 +12,7 @@ import {
 } from '@mui/material';
 import { PersonAdd } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { userService } from '../services/api';
+import { authService, userService } from '../services/api';
 import { CreateOrUpdateUserData, Role, ContactType } from '../types';
 
 const CreateUser: React.FC = () => {
@@ -62,9 +62,14 @@ const CreateUser: React.FC = () => {
       setError('');
       
       const newUser = await userService.createUser(formData);
+
+      // Auto-login so the user has tokens for protected routes
+      const loggedIn = await authService.login(formData.email, formData.password!);
+      localStorage.setItem('currentUserId', loggedIn.id);
+      localStorage.setItem('currentUserName', loggedIn.name);
+      localStorage.setItem('currentUserRole', loggedIn.role);
+
       setSuccess('User created successfully!');
-      
-      // Redirect to user profile after successful creation
       setTimeout(() => {
         navigate(`/users/${newUser.id}`);
       }, 2000);

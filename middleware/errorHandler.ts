@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { AppError } from '../lib/AppError';
 
 // Global error handler middleware
 export const errorHandler = (
@@ -9,7 +10,14 @@ export const errorHandler = (
 ): void => {
   console.error('Error:', err);
 
-  // Handle specific error types
+  if (err instanceof AppError) {
+    res.status(err.statusCode).json({
+      success: false,
+      error: err.message
+    });
+    return;
+  }
+
   if (err.name === 'ValidationError') {
     res.status(400).json({
       success: false,
@@ -19,7 +27,7 @@ export const errorHandler = (
     return;
   }
 
-  if (err.code === 'P2002') { // Prisma unique constraint violation
+  if (err.code === 'P2002') {
     res.status(409).json({
       success: false,
       error: 'Duplicate entry',
@@ -28,7 +36,7 @@ export const errorHandler = (
     return;
   }
 
-  if (err.code === 'P2025') { // Prisma record not found
+  if (err.code === 'P2025') {
     res.status(404).json({
       success: false,
       error: 'Record not found'
@@ -36,7 +44,6 @@ export const errorHandler = (
     return;
   }
 
-  // Default error response
   res.status(err.status || 500).json({
     success: false,
     error: err.message || 'Internal Server Error'
@@ -48,7 +55,7 @@ export const asyncHandler = (
   fn: (req: Request, res: Response, next: NextFunction) => Promise<any>
 ) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    Promise.resolve(fn(req, res, next)).catch(next);
+    return Promise.resolve(fn(req, res, next)).catch(next);
   };
 };
 

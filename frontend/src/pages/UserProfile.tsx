@@ -392,19 +392,7 @@ const UserProfile: React.FC = () => {
 
         <Box sx={{ mb: 3 }}>
           <Button
-            variant="contained"
-            onClick={() => {
-              localStorage.setItem('currentUserId', user.id);
-              localStorage.setItem('currentUserRole', user.role);
-              localStorage.setItem('currentUserName', user.name);
-              setSnackbar({ message: 'Current demo user set', severity: 'success' });
-            }}
-          >
-            Set as Current User (Demo)
-          </Button>
-          <Button
             variant="outlined"
-            sx={{ ml: 2 }}
             onClick={() => setIsEditing((prev) => !prev)}
           >
             {isEditing ? 'Cancel Edit' : 'Edit Profile'}

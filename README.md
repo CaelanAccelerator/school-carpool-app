@@ -86,3 +86,60 @@ In local development:
 ```env
 GEO_PROVIDER=google
 ```
+
+---
+
+## Authentication
+
+The app uses **JWT-based auth** with short-lived access tokens and long-lived refresh tokens:
+
+- **Access token** — 15 min, sent as `Authorization: Bearer <token>` on every request
+- **Refresh token** — 7 days, stored in the database (revocable on logout), used to issue a new access token when the old one expires
+
+All protected routes go through a single `authenticate` middleware (gateway pattern). The frontend handles the full token lifecycle transparently:
+
+- axios request interceptor auto-attaches the Bearer token
+- axios response interceptor catches 401s, silently refreshes, and retries the original request — concurrent requests during a refresh are queued and replayed once the new token arrives
+
+Public routes (registration, user browsing) require no token.
+
+---
+
+## Service layer
+
+Business logic was extracted from controllers into a dedicated `services/` layer:
+
+| Service | Responsibility |
+|---|---|
+| `authService` | login, token issuance, refresh, logout, revocation |
+| `userService` | user CRUD, password change |
+| `scheduleService` | schedule entry management |
+| `rideRequestService` | request creation, respond, cancel, inbox/outbox |
+| `matchingService` | matching algorithm, geo filtering |
+
+Controllers are now thin HTTP adapters: validate input → call service → return response.
+
+---
+
+## Deployment (EC2 + Docker)
+
+The app ships as three Docker containers managed by `docker-compose`:
+
+- **db** — PostgreSQL 16
+- **backend** — Express API (runs `prisma migrate deploy` on start)
+- **frontend** — React SPA served by nginx, which reverse-proxies `/api/*` to the backend
+
+To deploy on a fresh EC2 instance:
+
+```bash
+# 1. Copy the project to EC2 (or git clone)
+# 2. Set secrets in environment or a .env file
+export JWT_ACCESS_SECRET=<strong-random-secret>
+export JWT_REFRESH_SECRET=<strong-random-secret>
+export GOOGLE_MAPS_API_KEY=<your-key>
+
+# 3. Run the deploy script from project root
+./scripts/deploy-ec2.sh
+```
+
+> **Google Maps**: the map feature requires a billing-enabled API key. For a demo without billing, set `GEO_PROVIDER=mock` to disable real geo calls.

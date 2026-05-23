@@ -6,6 +6,7 @@ import './App.css';
 import Header from './components/Header';
 import CreateUser from './pages/CreateUser';
 import Home from './pages/Home';
+import Login from './pages/Login';
 import Match from './pages/Match';
 import RideInbox from './pages/RideInbox';
 import RideOutbox from './pages/RideOutbox';
@@ -35,6 +36,7 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="/users/:id" element={<UserProfile />} />
               <Route path="/create-user" element={<CreateUser />} />
+              <Route path="/login" element={<Login />} />
               <Route path="/match" element={<Match />} />
               <Route path="/schedule" element={<Schedule />} />
               <Route path="/ride-inbox" element={<RideInbox />} />

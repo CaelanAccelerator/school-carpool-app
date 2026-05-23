@@ -16,7 +16,10 @@ services:
       DATABASE_URL: postgresql://carpool:carpool_pass@db:5432/carpool?schema=public
       PORT: "4321"
       FRONTEND_URL: "*"
-      GEO_PROVIDER: "mock"
+      GEO_PROVIDER: "google"
+      GOOGLE_MAPS_API_KEY: "${GOOGLE_MAPS_API_KEY}"
+      JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET:-change-me-access-secret}"
+      JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET:-change-me-refresh-secret}"
     depends_on:
       - db
     ports:

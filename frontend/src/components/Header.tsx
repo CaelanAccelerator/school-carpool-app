@@ -1,6 +1,7 @@
 import {
     DirectionsCar,
     Home,
+    Login as LoginIcon,
     People,
     PersonAdd
 } from '@mui/icons-material';
@@ -15,6 +16,7 @@ import {
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { authService } from '../services/api';
 
 type CurrentUser = {
   id: string;
@@ -48,6 +50,7 @@ const Header: React.FC = () => {
     localStorage.removeItem('currentUserId');
     localStorage.removeItem('currentUserName');
     localStorage.removeItem('currentUserRole');
+    authService.logout().catch(() => {});
     setCurrentUser(null);
   };
 
@@ -80,7 +83,7 @@ const Header: React.FC = () => {
                 label={`${currentUser.name} (${currentUser.role})`}
               />
               <Button color="inherit" size="small" onClick={handleClearDemoUser}>
-                Clear Demo User
+                Sign Out
               </Button>
             </Box>
           )}
@@ -131,6 +134,18 @@ const Header: React.FC = () => {
             Outbox
           </Button>
           
+          {!currentUser && (
+            <Button
+              component={Link}
+              to="/login"
+              color="inherit"
+              startIcon={<LoginIcon />}
+              variant={isActive('/login') ? 'outlined' : 'text'}
+            >
+              Login
+            </Button>
+          )}
+
           <Button
             component={currentUser ? Link : Link}
             to={currentUser ? `/users/${currentUser.id}` : '/create-user'}
