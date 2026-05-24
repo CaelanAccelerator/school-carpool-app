@@ -3,7 +3,10 @@ import { AppError } from '../lib/AppError';
 import { CAMPUS_NAMES, getCampusCoords } from '../lib/config/campusCoords';
 import { createGeoProvider } from '../lib/geo/createGeoProvider';
 import { prisma } from '../lib/prisma';
+import { redis } from '../lib/redis';
 import { minutesToTime, timeToMinutes } from '../lib/timeUtils';
+
+const MATCH_CACHE_TTL = 300; // 5 minutes — short enough that stale schedules are acceptable
 
 export interface MatchByTimeFieldParams {
   userId: string;
@@ -135,6 +138,20 @@ const sortResults = (results: any[]) =>
 export const matchingService = {
   async matchByTimeField(params: MatchByTimeFieldParams) {
     const { userId, dayOfWeek, timeValue, flexibilityMins, timeField, targetRoleGroup } = params;
+
+    // Cache-aside: all params that affect the result are part of the key
+    const cacheKey = `cache:match:${userId}:${dayOfWeek}:${timeField}:${timeValue}:${flexibilityMins}:${targetRoleGroup}`;
+
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        console.log('[cache] hit:', cacheKey);
+        return JSON.parse(cached);
+      }
+    } catch (err) {
+      console.error('[cache] Redis GET failed, computing fresh:', (err as Error).message);
+    }
+
     const timeMins = timeToMinutes(timeValue);
 
     const user = await getRequesterOrThrow(userId);
@@ -156,21 +173,30 @@ export const matchingService = {
 
     const baseResults = buildBaseResults(matchingEntries, timeField, timeMins);
 
+    let result: { results: any[]; geoNote: string | undefined };
+
     if (!user.homeLat || !user.homeLng) {
-      return {
+      result = {
         results: baseResults.sort((a: any, b: any) => a.matchingScore.timeDifference - b.matchingScore.timeDifference),
         geoNote: 'Geo filtering skipped: requester home location missing.'
       };
+    } else {
+      const filteredResults = await applyGeoDetourFilter(
+        baseResults,
+        { homeLat: user.homeLat, homeLng: user.homeLng },
+        campusCoords,
+        timeField
+      );
+      result = { results: sortResults(filteredResults), geoNote: undefined };
     }
 
-    const filteredResults = await applyGeoDetourFilter(
-      baseResults,
-      { homeLat: user.homeLat, homeLng: user.homeLng },
-      campusCoords,
-      timeField
-    );
+    try {
+      await redis.set(cacheKey, JSON.stringify(result), 'EX', MATCH_CACHE_TTL);
+    } catch (err) {
+      console.error('[cache] Redis SET failed:', (err as Error).message);
+    }
 
-    return { results: sortResults(filteredResults), geoNote: undefined };
+    return result;
   },
 
   async getDriverAvailability(driverId: string, dayOfWeek: number) {

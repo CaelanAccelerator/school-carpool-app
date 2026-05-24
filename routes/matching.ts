@@ -7,13 +7,15 @@ import {
   getDriverAvailability
 } from '../controllers/matchingController';
 import { authenticate } from '../middleware';
+import { matchingRateLimit } from '../middleware/rateLimit';
 
 const router = express.Router();
 
-router.post('/users/:userId/find-optimal-passengers-to-campus', authenticate, findOptimalPassengersToCampus);
-router.post('/users/:userId/find-optimal-passengers-go-home', authenticate, findOptimalPassengersGoHome);
-router.post('/users/:userId/find-optimal-drivers-to-campus', authenticate, findOptimalDriversToCampus);
-router.post('/users/:userId/find-optimal-drivers-go-home', authenticate, findOptimalDriversGoHome);
+// authenticate first so req.user is available inside matchingRateLimit
+router.post('/users/:userId/find-optimal-passengers-to-campus', authenticate, matchingRateLimit, findOptimalPassengersToCampus);
+router.post('/users/:userId/find-optimal-passengers-go-home', authenticate, matchingRateLimit, findOptimalPassengersGoHome);
+router.post('/users/:userId/find-optimal-drivers-to-campus', authenticate, matchingRateLimit, findOptimalDriversToCampus);
+router.post('/users/:userId/find-optimal-drivers-go-home', authenticate, matchingRateLimit, findOptimalDriversGoHome);
 router.get('/drivers/:driverId/availability/:dayOfWeek', authenticate, getDriverAvailability);
 
 export default router;

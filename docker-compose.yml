@@ -10,6 +10,12 @@ services:
     ports:
       - "5432:5432"
 
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no
+    ports:
+      - "6379:6379"
+
   backend:
     build: .
     environment:
@@ -20,8 +26,11 @@ services:
       GOOGLE_MAPS_API_KEY: "${GOOGLE_MAPS_API_KEY}"
       JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET:-change-me-access-secret}"
       JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET:-change-me-refresh-secret}"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     depends_on:
       - db
+      - redis
     ports:
       - "4321:4321"
     command: sh -c "npx prisma migrate deploy && node dist/bin/www.js"
