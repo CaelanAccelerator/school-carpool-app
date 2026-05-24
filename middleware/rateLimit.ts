@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { AppError } from '../lib/AppError';
 import { redis } from '../lib/redis';
+import './authenticate'; // pulls in the Express.Request augmentation (req.user)
 
 const WINDOW_MS = 60_000;   // 1-minute fixed window
 const MAX_REQUESTS = 10;    // requests per window per user

@@ -36,6 +36,10 @@ The goal was not just “build pages + APIs”, but to design something that fee
 - Material UI
 - Google Maps JavaScript API (for location editing)
 
+### Caching / Rate limiting
+
+- Redis
+
 ### Engineering
 
 - Provider abstraction for geo logic (mock vs real Google)
@@ -121,11 +125,53 @@ Controllers are now thin HTTP adapters: validate input → call service → retu
 
 ---
 
+## Redis: caching and rate limiting
+
+Two problems motivated adding Redis to the matching layer:
+
+1. **Google Maps API cost** — every geo-matching request calls the Distance Matrix API, which is metered. The same user querying the same parameters repeatedly shouldn't trigger repeated API calls.
+2. **Abuse prevention** — without rate limiting, a user could spam the matching endpoint and run up the Maps API bill.
+
+### Cache-aside (match results)
+
+```
+GET cache:match:{userId}:{dayOfWeek}:{timeField}:{timeValue}:{flexMin}:{role}
+  → hit:  return JSON.parse(cached)          ← skip DB + Maps API entirely
+  → miss: run matching logic → SET with EX 300  ← cache for 5 minutes
+```
+
+All parameters that affect the result are part of the key, so different queries never collide. TTL is 5 minutes — short enough that stale schedules are acceptable for a carpool app, long enough to absorb repeated queries.
+
+If Redis is unreachable, the `GET` and `SET` calls are each wrapped in `try-catch`; the service computes and returns results normally.
+
+### Fixed-window rate limiting (matching endpoints)
+
+```
+key = ratelimit:match:{userId}:{floor(now / 60000)}   ← one key per user per minute
+
+INCR key          → returns new count (atomic, no lock needed — Redis is single-threaded)
+if count == 1:
+  EXPIRE key 60   → set TTL so the key cleans itself up
+if count > 10:
+  → 429 Too Many Requests
+```
+
+The middleware runs after `authenticate` so `req.user.id` is available. It also sets `X-RateLimit-Limit` / `X-RateLimit-Remaining` headers on every response.
+
+If Redis is unreachable the middleware catches the error, logs it, and calls `next()` — rate limiting degrades gracefully without blocking requests.
+
+### Key design note
+
+`INCR` and `EXPIRE` are two separate commands, not one atomic operation. If the process crashes between them the key leaks — but because the key encodes the minute timestamp, it becomes unreachable the next minute anyway. The worst case is one window's quota counting against the following window, which is acceptable for this use case.
+
+---
+
 ## Deployment (EC2 + Docker)
 
-The app ships as three Docker containers managed by `docker-compose`:
+The app ships as four Docker containers managed by `docker-compose`:
 
 - **db** — PostgreSQL 16
+- **redis** — Redis 7 (persistence disabled — caches and rate-limit counters are ephemeral by design)
 - **backend** — Express API (runs `prisma migrate deploy` on start)
 - **frontend** — React SPA served by nginx, which reverse-proxies `/api/*` to the backend
 
